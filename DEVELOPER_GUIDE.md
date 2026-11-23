@@ -41,7 +41,7 @@ app/src/main/java/com/puzzel/lab/marbelshort/
 │  └─ GameEngine.kt         real-time simulation: taps, marble streams, physics, belt, cups, win/lose
 ├─ render/
 │  ├─ GameRenderer.kt       draws the playground (baked static layers + cached sprites)
-│  ├─ MachineArt.kt         procedural art: marbles, jelly blocks, cup pucks, belt socket, roller hub (+ unused legacy parts)
+│  ├─ MachineArt.kt         procedural art: marbles, jelly blocks, jelly-box cups, belt socket, roller hub (+ unused legacy parts)
 │  ├─ Sprites.kt            `Col` colour helpers, `Painter` (icons/overlays/text), `SpriteCache`
 │  └─ Themes.kt             5 colour themes (Candy Lab, Ocean, Space, Lava, Forest) + their sky palettes
 └─ ui/
@@ -130,6 +130,40 @@ Blocks that are open are drawn raised and glossy, with their marbles visible. Bl
 6. **Cups** are built from the plan (3 per block), shuffled within a difficulty "window", then dealt into 4 or 5 columns. Some cups are hidden.
 7. **Verify** with `PuzzleSim`. The belt **capacity is the plan's peak load plus a difficulty margin** (clamped to 14…48). If the peak is too high, the window shrinks and it retries; if that fails, the generator uses a fresh seed.
 
+**Difficulty curve (retuned 2026-11-21: "hard much sooner" plus a tighter belt):**
+- **Levels 1–10** (`TUTORIAL_LEVELS`) are the unchanged hand-made tutorial.
+- **Levels 11–30** keep their hand-made boards and feature introductions, but with a tight belt (3 spare slots for 11–20, 2 for 21–30), a more mixed cup order and, from 21, one extra colour.
+- **31+:** `d = 0.6 + 0.4 · (1 − e^(−(n−30)/15))`, plus the saw-tooth and the boss and "7" bumps, minus 0.12 on a feature-intro level. Difficulty is close to the maximum by about level 60.
+  - Board size: about `20 + 22·d` blocks (at most 6×7).
+  - Colours: `4 + 6·d` (at most 10).
+  - Spare belt slots: `4 − 2.5·d`, at least 2, or 1 on boss levels. Capacity = plan peak + margin.
+  - Cup-order window: `2 + 9·d`.
+- **Special blocks and hidden cups (raised the same day):**
+  - Up to `2 + 3·d` feature types per level, each with probability `(0.6 + 0.4·d)·weight`.
+  - Counts per type:
+
+    | Feature | Count |
+    |---|---|
+    | Mystery block, hidden cup | `3 + rand(3 + 6·d)` |
+    | Cage, crate, ice, arrow (and the rest) | `2 + rand(2 + 5·d)` |
+    | Key, paint | `1 + rand(1 + 2·d)` |
+
+  - Each key chains 2–4 blocks.
+  - Levels 11–30 get one more of each of their special blocks (keys excepted).
+  - Averages: about 17–20 special blocks and 3–5 hidden cups per level from 31 on.
+- **Measured win rates** (no boosters):
+
+  | Levels | Smart player | Perfect-play bot |
+  |---|---|---|
+  | 31–60 | 65% | 85–96% |
+  | 61–200 | 38% | 85–96% |
+  | 201+ | 46–56% | 85–96% |
+
+  - The *smart player* pops the colour the front cups need, without knowing the solution. That morning it won 72–95% of levels 11–200.
+  - The *perfect-play bot* follows the plan and waits when the next block is still locked (e.g. a crate waiting for cups). It shows the levels stay winnable.
+  - The bots' script is not in the repo: `DifficultyPrint`, kept as a scratch file.
+- **Belt limits:** a tighter belt (1 spare slot) or much more cup mixing (window `4 + 16·d`) mostly made levels unfair. The perfect-play bot fell to about 77% while the smart player barely changed, so special blocks and hidden information are the main difficulty lever.
+
 **`LevelGeneratorTest` replays the plan of all 5000 levels.** It checks that every tap is legal, that each level is solved within capacity, that marbles and cup slots balance per colour, that each level starts with an open block, and that intro levels contain their feature. **Run it after any change to `level/`.**
 
 ---
@@ -172,10 +206,50 @@ FLYING: arrow blocks without a path and hammered blocks fly to the hopper mouth 
   - Bomb → +6 moves.
   - No moves → shuffle the tray and add +6 slots.
 - **Results:**
-  - `stars` is based on peak belt use: ≤62% gives 3 stars, ≤86% gives 2.
-  - Any booster caps the result at 2 stars, and a continue sets it to 1.
+  - `stars`:
+    - 3: won without boosters and the belt never got completely full (`peakBelt < capacity`).
+    - 2: a booster was used, or the belt filled up at some point.
+    - 1: "Continue" was used.
+  - The old rule (≤62% peak belt use for 3 stars, ≤86% for 2) stopped working after the difficulty change. Levels leave only about 2 spare slots, so even perfect play gave 1 star.
+  - Measured on wins:
+
+    | Player | 3-star wins (levels 11+) |
+    |---|---|
+    | Perfect-play bot | 77–87% |
+    | Smart player | 56–59% |
+
+    Levels 1–10 give 3 stars to both.
   - `coinReward()` gives the base coins plus a star bonus, combo coins and a boss bonus.
 - **Events:** the engine never touches Android. It reports through `GameListener` (`sound`, `haptic`, `combo`, `statusChanged`); `GameScreen` implements it.
+
+### Funnel capacity: the funnel fills up to the line under the board, then "WAIT!"
+Balls fill the whole funnel, up to the line just under the bottom row of blocks. Only when it is full does a tap get refused. Balls never gather up in the board.
+- **`hopperCap` is measured per level.** At level start `measureFunnel()` silently drops test balls spread across the funnel (golden-ratio steps) through the real physics and lets each one settle. It counts how many fit before the settled pile reaches the line (centre above `gridBottom + 0.25·r`), minus a small slack (1, or capacity/15) for balls still rolling in. Typical values are 22–40 balls, about 3–4 blocks.
+- **All or nothing:** `funnelHasRoom(block)` lets a block release only if all of its balls fit: balls in the funnel or on their way, plus its own 9 (18 for x2), must fit within `hopperCap`, and the settled pile must not have reached the line anywhere (`pileAtLine()`, e.g. a corner under a side exit). An empty funnel always takes one block. Otherwise the block stays closed and whole, wobbles, and "WAIT!" floats over the funnel. `hammer()` refuses the same way without using up the booster. An opened block never keeps balls back: all of them leave together, with only the short start stagger. (A version that let the leftover balls wait inside the opened block was removed at the user's request.)
+- **Physics that fills the width:**
+  - Gravity rolls balls down the slopes. The only centre drift is a small non-accumulating creep near the pipe mouth (a drift added to `x` but not to `px` acts like sideways gravity and stacked balls into a tower).
+  - Balls leave an exit rolling toward the middle, so the funnel fills from the centre outward.
+  - The stall nudge only acts when the pipe is empty.
+  - A funnel ball can't be squeezed more than 0.2·r above the line; a ball above the line is eased inward.
+
+### Funnel anti-jam (no stuck balls in the "tunnel")
+Round balls in a narrowing funnel can wedge side by side above the pipe mouth, forming an "arch". This happened in the original code too.
+- **Leader:** while the pipe is empty, `physics()` picks the lowest ball in the funnel as the leader. It is steered toward the pipe centre (harder the lower it is), and in a collision with another ball it holds its place while the other ball takes the whole push. The funnel therefore always feeds one ball at a time.
+- **Regression test:** `FunnelFlowTest` plays about 490 levels on two screen heights, tapping every 0.15 s, which is the worst case for the funnel. It fails if:
+  - balls sit in the funnel with none reaching the pipe for 2 s;
+  - a ball waits at the gate for more than a lap while the belt has a free slot;
+  - a launched ball waits at an exit because the funnel is full;
+  - a funnel ball stays more than a quarter-radius above the line for more than 1 s;
+  - an opened block keeps some balls back for more than 0.8 s (partial release).
+
+  Before these fixes, 713 of 976 runs got stuck and every run piled balls into the board. Now none do.
+
+### Belt speed
+The belt normally runs at `beltSpeed` (175 units/s). `beltBoost()` switches it to `BELT_BOOST` (2x) while no ball can board, and the speed eases between the two.
+- **Nothing waiting:** no ball is in the board or funnel (`PATH` / `PHYSICS`), so every released ball is already on the belt and is delivered to the cups quickly.
+- **Belt full:** balls are waiting but the belt has no free slot, so the boost clears it sooner.
+
+As soon as balls are waiting and a slot is free, the belt goes back to normal speed so they can board. The jam and no-move timers still use the normal `lapTime`, so a boosted belt never fails a level early.
 
 ### Boosters (counts saved in `GameRepository.boosters`)
 | Booster | Engine call | Effect |
@@ -184,6 +258,21 @@ FLYING: arrow blocks without a path and hammered blocks fly to the hopper mouth 
 | Magnet | `magnet()` | Sends belt marbles of the best colour into any matching cups, even buried ones |
 | +6 Slots | `boosterSlots()` | Grows belt capacity and re-maps the marbles onto the new slots |
 | Shuffle | `boosterShuffle()` | Shuffles the colours of cups that have no reserved marbles |
+
+Notes (checked 2026-11-21):
+- **Not used up when they do nothing.** A refused hammer (full funnel → "WAIT!"), a magnet with nothing to pull, or a shuffle with fewer than 2 cups doesn't consume the booster. Every use caps the level at 2 stars.
+- **Belt label:** the renderer rebuilds the "count / capacity" label when *either* number changes. It used to wait for the count, so right after +6 Slots the old capacity stayed on screen. `magnet()` updates `beltCount` straight away.
+- **Crowded belt:** the belt has a fixed length, and boosters or Continue can push capacity past about 48. Belt marbles and sockets then shrink to `0.47 · spacing` so they never overlap, and the rivets between sockets hide.
+- **`BoosterTest`** covers each booster:
+
+  | Booster | Checked |
+  |---|---|
+  | +6 Slots | capacity grows by 6, no marble is lost, slot indices stay consistent |
+  | Magnet | only matching colours move, cups never over-fill |
+  | Shuffle | the same colour set, cups being filled are untouched, hidden cups are revealed |
+  | Hammer | locked blocks are smashed; it is refused, and not used up, when the funnel is full |
+
+  It also plays whole levels using every booster, checking that they finish without losing a marble.
 
 ---
 
@@ -204,11 +293,14 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
   - One `socket` sprite blit and one rivet per belt slot. They move with `slotS(i)`, so the belt visibly runs even when it is empty.
   - Two roller `hub` sprites, rotated by `beltOffset / beltR`.
   - The fill gauge, using three pre-built shaders: green, yellow from 55 %, and red from 78 % with a pulse. Its label string is rebuilt only when the count changes.
-  - One "queue fog" gradient rect over the tray, so the active cup row stands out.
 - **Moving things are single bitmap blits from `SpriteCache`:**
   - `marbleShadowed` (each marble is one image with its shadow built in).
   - `block(color, variant, size, skin, open)`, which has separate open and closed versions that cross-fade via `BlockVisual.open`.
   - `cup`, `socket`, `hub`, and `overlay` (cage, chains, crate, ice, key, arrow, bomb, bucket, switch).
+- **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` (`cell * 0.16`, kept between 14 and 19, so the funnel (110–170 units tall) holds about 1–2 blocks of balls) while they travel through the board, the hopper and the pipe. The spout width, gate and hopper physics are sized from it. While boarding they shrink to `marbleR` (12), the belt and cup size; the belt keeps the small size because it can hold 48+ marbles.
+- **Block colours:** blocks and cups use solid, saturated marble colours, as in the reference (palette in `MarbleColors`).
+  - Blocked blocks are a solid sealed lid with no marbles shown.
+  - Open blocks show their 9 marbles.
 - **Palette:** colours come from the selected `GameTheme` (`Themes.kt`).
   - The belt track is deep indigo, only lightly tinted by the world, so marbles stand out.
   - Cell wells use a neutral slate tint, so pastel blocks never blend into the board in the pink or green worlds.
@@ -218,7 +310,7 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
     - Open: raised, with a bevel, a recessed window holding 9 marbles, and a glass gloss and glint.
     - Blocked: lower, with the marbles faded behind a frosted lid.
     - Mystery: a lavender candy stripe with a gold "?".
-  - `MachineArt.puck` draws the cup: a glossy candy cylinder with a specular stripe, a raised lip and 3 deep sockets.
+  - `MachineArt.puck` draws the cup as a "jelly box": a rounded candy box with a depth side, bevel and glint, and 3 recessed holes. The hole centres must match `GameLayout.dimpleDx` / `dimpleDy`, which the engine uses as drop targets and the renderer uses to draw the marbles sitting in a cup.
   - `MachineArt.socket` and `MachineArt.hub` draw the belt parts.
   - `crate`, `gear`, `cradle` and `chromeRect` are left over from an earlier "factory machine" design and are currently unused.
 
@@ -302,9 +394,12 @@ The full visual spec is in **UI_GRAPHICS_PLAN.md** ("Candy Glass Factory": gloss
 - **`GameScreen`:**
   - **Game loop:** `withFrameNanos` calls `engine.update(dt)` while no blocking overlay is open and bumps a frame counter, which invalidates the canvas.
   - **Input:** a tap is handled on pointer-down (`awaitFirstDown`) for responsiveness.
-  - **HUD:** pause, a `Ribbon` level badge (plus a crown + "SUPER HARD" chip on boss levels), coins, and a glass `BoosterTray`. The tutorial hand shows on levels 1–2. The `ComboBanner` has rays and gradient text.
+  - **HUD:** pause, a `Ribbon` level badge (plus a crown + "SUPER HARD" chip on boss levels), coins, and a glass `BoosterTray`. The tap tutorial hand shows on levels 1–2; special blocks have their own spotlight tutorial (see `TUTORIAL` below). The `ComboBanner` has rays and gradient text.
   - **Popups**, each in its own `PopupHost(visible = overlay == …)` so they animate in and out:
-    - `INTRO`: the "New!" feature popup on a glowing pedestal.
+    - `INTRO` and `TUTORIAL`: teaching special blocks. When a level contains special-block features the player has never been taught, the level opens like this:
+      1. **Cards:** a "New!" card (on a glowing pedestal) for each new feature, one after another. Each card shows "n / total" and a Next button; the last one says "Show me!". `Feature.presentIn(spec)` lists the level's features: chains count as KEY, grey blocks as PAINT, hidden cups as HIDDEN_CUP.
+      2. **Spotlight:** once the board has assembled (`!engine.inIntro`), each feature gets a tutorial step. The board dims and a real block of that kind (or the highest visible hidden cup) is ringed. `engine.featureTarget(f)` finds it. The hand points at it, and a card gives the how-to (`tutorialTip`). The game is paused meanwhile. The last step says "Let's play!".
+      3. **Remembered:** `GameRepository.seenFeatures` (pref `seen_features`) keeps each feature from being taught twice. The first time this version runs, features whose unlock level the player has already passed count as seen.
     - `PAUSE`: with sound toggles.
     - `WIN`: rays, confetti, stars with sparkle bursts, coin count-up and the lucky multiplier needle (×2/×3/×5).
     - `FAIL`: jammed-belt illustration; continue for 150 coins, or retry.
@@ -385,6 +480,13 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 
 ## 11. Debugging helpers
 
+- **Add test coins (debug builds only):** every coin pill (home, tabs and game HUD) shows a green "+" that opens a "Coins · DEBUG BUILD" popup with +100, +1,000 and +10,000 buttons (and "Open Shop" from home). The pieces live in `ui/components/AdComponents.kt`:
+  - `CoinPill(value, modifier, onShop)` draws the pill.
+  - The `DebugCoins` state object holds whether the popup is open.
+  - `DebugCoinsOverlay()` is the popup, rendered once at the app root next to `DebugAdOverlay`.
+
+  In release builds `BuildConfig.DEBUG` is false: the "+" only appears where `onShop` is given (home) and simply opens the Shop.
+
 - **Jump to any level on a connected device** (debug build only; uses `run-as` to edit the save file):
   ```bash
   tools/jump_level.sh 120 shot_name     # sets level=120, default skin/theme, opens the game, saves shot_name.png next to the script
@@ -401,7 +503,7 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 2. Rules: extend `Board.isLocked` / `canTap` / `tap` (and `counterRemaining` if it shows a number).
 3. Generator: assign it in `LevelGenerator.build()` *consistently with the planned order*, and add it to `weight`/`countFor`.
 4. Engine effects on pop: `GameEngine.streamOut` / `burstAtMouth` (see how `SWITCH` reverses the belt).
-5. Art: draw an overlay in `Painter` and register it in `SpriteCache.overlay`, then use it in `GameRenderer.drawBlock`. Add a preview to `FeatureIntroContent` in `GameScreen`.
+5. Art: draw an overlay in `Painter` and register it in `SpriteCache.overlay`, then use it in `GameRenderer.drawBlock`. Add a preview to `FeatureIntroContent` in `GameScreen`, a how-to line to `tutorialTip`, and map the kind in `Feature.presentIn` / `GameEngine.featureTarget` if its name differs from the feature.
 6. Run `testDebugUnitTest`.
 
 **Tune difficulty**: change `handmade` (levels 1–30) or `recipeFor()` (block count, colours, cup window, belt margin, feature chances). The tests guarantee solvability, so run them after every change.

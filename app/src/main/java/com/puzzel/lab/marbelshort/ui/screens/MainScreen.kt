@@ -95,6 +95,7 @@ import com.puzzel.lab.marbelshort.ui.components.NotifyBadge
 import com.puzzel.lab.marbelshort.ui.components.OutlinedText
 import com.puzzel.lab.marbelshort.ui.components.PopupHost
 import com.puzzel.lab.marbelshort.ui.components.ResourcePill
+import com.puzzel.lab.marbelshort.ui.components.CoinPill
 import com.puzzel.lab.marbelshort.ui.components.SkyBackground
 import com.puzzel.lab.marbelshort.ui.components.StarRow
 import com.puzzel.lab.marbelshort.ui.components.SunRays
@@ -355,7 +356,7 @@ private fun HomeTab(nav: Nav, onWorld: (Int) -> Unit) {
             Spacer(Modifier.width(4.dp))
             ResourcePill(Ico.STAR, repo.totalStars.toString())
             Spacer(Modifier.weight(1f))
-            ResourcePill(Ico.COIN, repo.coins.intValue.toString(), onPlus = { nav.tab = 0 })
+            CoinPill(repo.coins.intValue, onShop = { nav.tab = 0 })
             Spacer(Modifier.width(6.dp))
             IconRoundButton(Ico.GEAR, Modifier, size = 46.dp, color = BtnColor.Purple, iconScale = 0.66f) { nav.go(Screen.Settings) }
         }

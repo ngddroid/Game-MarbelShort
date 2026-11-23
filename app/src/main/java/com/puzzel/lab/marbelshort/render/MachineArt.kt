@@ -139,14 +139,14 @@ object MachineArt {
         // depth vignette (thick glass)
         reset()
         p.alpha = 255; p.shader = RadialGradient(cx - r * 0.12f, cy - r * 0.18f, r * 1.18f,
-            intArrayOf(0x00000000, 0x00000000, Col.alpha(Col.darken(base, 0.75f), if (skin == 5) 60 else 150)), floatArrayOf(0f, 0.6f, 1f), Shader.TileMode.CLAMP)
+            intArrayOf(0x00000000, 0x00000000, Col.alpha(Col.darken(base, 0.6f), if (skin == 5) 50 else 85)), floatArrayOf(0f, 0.65f, 1f), Shader.TileMode.CLAMP)
         c.drawCircle(cx, cy, r, p)
         c.restore()
     }
 
     private fun classicBody(c: Canvas, cx: Float, cy: Float, r: Float, base: Int, swirl: Boolean, seed: Int = 0) {
         p.alpha = 255; p.shader = RadialGradient(cx - r * 0.22f, cy - r * 0.28f, r * 1.4f,
-            intArrayOf(Col.lighten(base, 0.5f), base, Col.darken(base, 0.5f)), floatArrayOf(0f, 0.48f, 1f), Shader.TileMode.CLAMP)
+            intArrayOf(Col.lighten(base, 0.55f), base, Col.darken(base, 0.28f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
         c.drawCircle(cx, cy, r, p)
         p.alpha = 255; p.shader = RadialGradient(cx, cy + r * 0.1f, r * 0.75f, intArrayOf(Col.alpha(Col.lighten(base, 0.55f), 120), Col.alpha(base, 0)), null, Shader.TileMode.CLAMP)
         c.drawCircle(cx, cy, r, p)
@@ -203,7 +203,7 @@ object MachineArt {
         rect.set(cx - r * 0.86f, cy - r * 0.86f, cx + r * 0.86f, cy + r * 0.86f)
         c.drawArc(rect, 15f, 75f, false, p)
         // definition outline
-        p.strokeWidth = max(1f, r * 0.06f); p.color = Col.alpha(Col.darken(base, 0.65f), 190)
+        p.strokeWidth = max(1f, r * 0.06f); p.color = Col.alpha(Col.darken(base, 0.5f), 170)
         c.drawCircle(cx, cy, r - p.strokeWidth / 2, p)
         p.style = Paint.Style.FILL
         // main soft specular
@@ -325,18 +325,18 @@ object MachineArt {
      * frosted lid. variant: 0 normal, 1 mystery, 2 grey (paint), 3 rainbow.
      */
     fun jelly(c: Canvas, x: Float, y: Float, s: Float, colorId: Int, variant: Int, open: Boolean, skin: Int) {
-        val base = when (variant) { 1 -> 0xFF9A82F0.toInt(); 2 -> 0xFFA9ADC2.toInt(); 3 -> 0xFFB98CFF.toInt(); else -> Painter.colorOf(colorId) }
+        val base = when (variant) { 1 -> 0xFF8A5CFF.toInt(); 2 -> 0xFFA9ADC2.toInt(); 3 -> 0xFFB98CFF.toInt(); else -> Painter.colorOf(colorId) }
         val white = colorId == 8 && variant == 0
         val pad = s * 0.05f
         val rad = s * 0.25f
-        val depth = if (open) s * 0.1f else s * 0.05f
+        val depth = if (open) s * 0.1f else s * 0.08f
         val outline = if (white) 0xFF8C93AE.toInt() else Col.darken(base, 0.55f)
         // contact shadow
-        shadow(c, x + s / 2, y + s - pad - depth * 0.15f, s * 0.43f, s * 0.075f, if (open) 120 else 70)
+        shadow(c, x + s / 2, y + s - pad - depth * 0.15f, s * 0.43f, s * 0.075f, if (open) 120 else 100)
         reset()
         // depth side
         rect.set(x + pad, y + pad + depth, x + s - pad, y + s - pad)
-        p.color = if (open) Col.darken(base, if (white) 0.22f else 0.34f) else Col.darken(Col.lighten(base, 0.3f), 0.22f)
+        p.color = Col.darken(base, if (white) 0.22f else 0.3f)
         c.drawRoundRect(rect, rad, rad, p)
         p.color = Col.alpha(Color.WHITE, if (open) 46 else 30)
         rect.set(x + pad + rad * 0.5f, y + s - pad - depth * 0.55f, x + s - pad - rad * 0.5f, y + s - pad - depth * 0.35f)
@@ -346,9 +346,9 @@ object MachineArt {
         p.alpha = 255
         p.shader = when {
             variant == 3 -> LinearGradient(face.left, face.top, face.right, face.bottom,
-                if (open) Col.rainbow else IntArray(Col.rainbow.size) { Col.lighten(Col.rainbow[it], 0.5f) }, null, Shader.TileMode.CLAMP)
-            open -> LinearGradient(0f, face.top, 0f, face.bottom, intArrayOf(Col.lighten(base, 0.38f), base, Col.darken(base, 0.06f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
-            else -> LinearGradient(0f, face.top, 0f, face.bottom, Col.lighten(base, 0.5f), Col.lighten(base, 0.26f), Shader.TileMode.CLAMP)
+                Col.rainbow, null, Shader.TileMode.CLAMP)
+            open -> LinearGradient(0f, face.top, 0f, face.bottom, intArrayOf(Col.lighten(base, 0.24f), base, Col.darken(base, 0.04f)), floatArrayOf(0f, 0.5f, 1f), Shader.TileMode.CLAMP)
+            else -> LinearGradient(0f, face.top, 0f, face.bottom, intArrayOf(Col.lighten(base, 0.16f), base, Col.darken(base, 0.03f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
         }
         c.drawRoundRect(face, rad, rad, p); p.shader = null
         c.save(); path.reset(); path.addRoundRect(face, rad, rad, Path.Direction.CW); c.clipPath(path)
@@ -372,17 +372,23 @@ object MachineArt {
             Painter.text(c, "?", face.centerX(), face.centerY() + s * 0.01f, s * 0.56f, 0xFFFFD54A.toInt(), 0xFF3B1F7A.toInt(), s * 0.075f)
             Painter.star4(c, face.left + face.width() * 0.2f, face.top + face.height() * 0.28f, s * 0.05f, 0xDDFFFFFF.toInt())
             Painter.star4(c, face.right - face.width() * 0.18f, face.bottom - face.height() * 0.26f, s * 0.035f, 0xBBFFFFFF.toInt())
+        } else if (!open) {
+            // closed: a solid candy lid with a soft embossed panel (marbles hidden, like a sealed box)
+            p.style = Paint.Style.STROKE; p.strokeWidth = s * 0.022f
+            p.color = Col.alpha(Col.darken(base, 0.35f), if (white) 50 else 70)
+            rect.set(win); rect.offset(0f, s * 0.008f); c.drawRoundRect(rect, wr, wr, p)
+            p.color = Col.alpha(Color.WHITE, 90); c.drawRoundRect(win, wr, wr, p)
+            p.style = Paint.Style.FILL
         } else {
             // recessed window
-            p.color = if (open) Col.alpha(Col.darken(base, if (white) 0.25f else 0.42f), 150) else Col.alpha(Col.darken(base, 0.1f), 70)
+            p.color = Col.alpha(Col.darken(base, if (white) 0.2f else 0.3f), 120)
             c.drawRoundRect(win, wr, wr, p)
             c.save(); path.reset(); path.addRoundRect(win, wr, wr, Path.Direction.CW); c.clipPath(path)
-            p.alpha = 255; p.shader = LinearGradient(0f, win.top, 0f, win.top + win.height() * 0.35f, Col.alpha(Col.darken(base, 0.6f), if (open) 110 else 40), 0, Shader.TileMode.CLAMP)
+            p.alpha = 255; p.shader = LinearGradient(0f, win.top, 0f, win.top + win.height() * 0.35f, Col.alpha(Col.darken(base, 0.55f), 80), 0, Shader.TileMode.CLAMP)
             c.drawRect(win, p); p.shader = null
             c.restore()
-            val mr = s * 0.104f
+            val mr = s * 0.112f
             val stepX = win.width() / 3f; val stepY = win.height() / 3f
-            if (!open) c.saveLayerAlpha(win, 150)
             for (iy in 0 until 3) for (ix in 0 until 3) {
                 val mx = win.left + stepX * (ix + 0.5f)
                 val my = win.top + stepY * (iy + 0.5f) - s * 0.008f
@@ -392,17 +398,9 @@ object MachineArt {
                 if (variant == 2) { marbleBody(c, mx, my, mr, id, skin, 0xFFB4B8CA.toInt()); marbleGloss(c, mx, my, mr, id, skin, 0xFFB4B8CA.toInt()) }
                 else marble(c, mx, my, mr, id, skin)
             }
-            if (!open) c.restore()
             reset()
-            if (!open) {
-                // frosted lid over the stuck marbles
-                p.color = Col.alpha(Col.lighten(base, 0.75f), 100); c.drawRoundRect(win, wr, wr, p)
-                val rnd = Random(colorId * 5 + variant)
-                p.color = 0x99FFFFFF.toInt()
-                repeat(7) { c.drawCircle(win.left + rnd.nextFloat() * win.width(), win.top + rnd.nextFloat() * win.height(), s * (0.008f + rnd.nextFloat() * 0.012f), p) }
-            }
             p.style = Paint.Style.STROKE; p.strokeWidth = s * 0.02f
-            p.color = if (open) 0x66FFFFFF else 0xB3FFFFFF.toInt()
+            p.color = 0x66FFFFFF
             rect.set(win); rect.offset(0f, s * 0.006f); c.drawRoundRect(rect, wr, wr, p)
             p.style = Paint.Style.FILL
         }
@@ -412,19 +410,19 @@ object MachineArt {
         path2.moveTo(face.left, face.top + face.height() * 0.5f)
         path2.cubicTo(face.left + face.width() * 0.25f, face.top + face.height() * 0.3f, face.left + face.width() * 0.6f, face.top + face.height() * 0.22f, face.right, face.top + face.height() * 0.24f)
         path2.lineTo(face.right, face.top); path2.lineTo(face.left, face.top); path2.close()
-        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.top + face.height() * 0.5f, Col.alpha(Color.WHITE, if (open) 110 else 70), 0x00FFFFFF, Shader.TileMode.CLAMP)
+        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.top + face.height() * 0.5f, Col.alpha(Color.WHITE, if (open) 110 else 95), 0x00FFFFFF, Shader.TileMode.CLAMP)
         c.drawPath(path2, p); p.shader = null
         c.restore()
         // bevel + outline
         p.style = Paint.Style.STROKE; p.strokeWidth = s * 0.03f
-        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.bottom, intArrayOf(Col.alpha(Color.WHITE, if (open) 230 else 170), Col.alpha(Color.WHITE, 40), 0x00FFFFFF), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.bottom, intArrayOf(Col.alpha(Color.WHITE, if (open) 230 else 210), Col.alpha(Color.WHITE, 40), 0x00FFFFFF), floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
         val rim = RectF(face); rim.inset(s * 0.032f, s * 0.032f)
         c.drawRoundRect(rim, rad * 0.82f, rad * 0.82f, p); p.shader = null
-        p.strokeWidth = s * 0.024f; p.color = Col.alpha(outline, if (open) 220 else 110)
+        p.strokeWidth = s * 0.024f; p.color = Col.alpha(outline, if (open) 220 else 190)
         rect.set(x + pad, y + pad, x + s - pad, y + s - pad); c.drawRoundRect(rect, rad, rad, p)
         p.style = Paint.Style.FILL
         // glint
-        p.color = Col.alpha(Color.WHITE, if (open) 235 else 160)
+        p.color = Col.alpha(Color.WHITE, if (open) 235 else 215)
         rect.set(face.left + s * 0.1f, face.top + s * 0.07f, face.left + s * 0.27f, face.top + s * 0.12f)
         c.save(); c.rotate(-14f, rect.centerX(), rect.centerY()); c.drawOval(rect, p); c.restore()
         c.drawCircle(face.left + s * 0.31f, face.top + s * 0.085f, s * 0.018f, p)
@@ -432,67 +430,57 @@ object MachineArt {
 
     // =================================================================== cups (cylindrical pucks)
 
+    /**
+     * Tray cup — a "jelly box" in the same candy style as the board blocks: a rounded box with a darker
+     * depth side, a glossy face with a white bevel, and 3 recessed holes the marbles drop into.
+     * Hole centres: x ± w * 0.27, y + h * 0.42 (kept in sync with GameLayout.dimpleDx / dimpleDy).
+     */
     fun puck(c: Canvas, x: Float, y: Float, w: Float, h: Float, colorId: Int, hidden: Boolean) {
-        val base = if (hidden) 0xFF8C7BD6.toInt() else Painter.colorOf(colorId)
-        val eh = h * 0.4f
+        val base = if (hidden) 0xFF8A5CFF.toInt() else Painter.colorOf(colorId)
+        val white = colorId == 8 && !hidden
+        val padX = w * 0.035f
+        val top = y + h * 0.02f
+        val bottom = y + h * 0.95f
+        val depth = h * 0.14f
+        val rad = minOf(w * 0.11f, h * 0.3f)
+        val box = RectF(x + padX, top, x + w - padX, bottom)
         reset()
-        // body: rect + bottom half ellipse
-        path.reset()
-        path.addRect(x, y + eh / 2, x + w, y + h - eh / 2, Path.Direction.CW)
-        rect.set(x, y + h - eh, x + w, y + h); path2.reset(); path2.addOval(rect, Path.Direction.CW)
-        path.op(path2, Path.Op.UNION)
-        p.alpha = 255; p.shader = LinearGradient(x, 0f, x + w, 0f,
-            intArrayOf(Col.darken(base, 0.42f), Col.lighten(base, 0.22f), Col.lighten(base, 0.06f), base, Col.darken(base, 0.18f), Col.darken(base, 0.5f)),
-            floatArrayOf(0f, 0.16f, 0.32f, 0.6f, 0.86f, 1f), Shader.TileMode.CLAMP)
-        c.drawPath(path, p)
-        c.save(); c.clipPath(path)
-        // bottom shade + lower rim
-        p.alpha = 255; p.shader = LinearGradient(0f, y + h * 0.45f, 0f, y + h, 0x00000000, Col.alpha(Col.darken(base, 0.7f), 120), Shader.TileMode.CLAMP)
-        c.drawRect(x, y, x + w, y + h, p); p.shader = null
-        // specular stripe
-        p.alpha = 255; p.shader = LinearGradient(0f, y + eh / 2, 0f, y + h, Col.alpha(Color.WHITE, 150), 0x00FFFFFF, Shader.TileMode.CLAMP)
-        rect.set(x + w * 0.1f, y + eh / 2, x + w * 0.17f, y + h)
-        c.drawRoundRect(rect, w * 0.03f, w * 0.03f, p)
-        rect.set(x + w * 0.2f, y + eh / 2, x + w * 0.225f, y + h * 0.85f)
-        c.drawRect(rect, p); p.shader = null
-        // light band under the lip
-        p.style = Paint.Style.STROKE; p.strokeWidth = h * 0.05f; p.color = Col.alpha(Color.WHITE, 70)
-        rect.set(x, y + h * 0.66f - eh / 2, x + w, y + h * 0.66f + eh / 2)
-        c.drawArc(rect, 10f, 160f, false, p)
+        // soft contact shadow + depth side
+        p.color = 0x40281468
+        rect.set(box.left + w * 0.03f, box.top + depth, box.right - w * 0.03f, bottom + h * 0.04f)
+        c.drawRoundRect(rect, rad, rad, p)
+        p.color = Col.darken(base, if (white) 0.22f else 0.3f)
+        rect.set(box.left, box.top + depth, box.right, box.bottom)
+        c.drawRoundRect(rect, rad, rad, p)
+        // face
+        val face = RectF(box.left, box.top, box.right, box.bottom - depth)
+        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.bottom,
+            intArrayOf(Col.lighten(base, 0.25f), base, Col.darken(base, 0.04f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
+        c.drawRoundRect(face, rad, rad, p); p.shader = null
+        // white bevel + outline + glint
+        p.style = Paint.Style.STROKE
+        p.strokeWidth = h * 0.035f; p.color = 0x96FFFFFF.toInt()
+        rect.set(face); rect.inset(w * 0.03f, h * 0.055f)
+        c.drawRoundRect(rect, rad * 0.8f, rad * 0.8f, p)
+        p.strokeWidth = h * 0.028f; p.color = Col.alpha(if (white) 0xFF8C93AE.toInt() else Col.darken(base, 0.5f), 200)
+        c.drawRoundRect(box, rad, rad, p)
         p.style = Paint.Style.FILL
-        c.restore()
-        p.style = Paint.Style.STROKE; p.strokeWidth = h * 0.03f; p.color = Col.alpha(Col.darken(base, 0.6f), 160)
-        c.drawPath(path, p); p.style = Paint.Style.FILL
-        // top lip
-        rect.set(x, y, x + w, y + eh)
-        p.alpha = 255; p.shader = LinearGradient(0f, y, 0f, y + eh, Col.lighten(base, 0.6f), Col.lighten(base, 0.18f), Shader.TileMode.CLAMP)
-        c.drawOval(rect, p); p.shader = null
-        val inner = RectF(rect); inner.inset(w * 0.035f, eh * 0.14f)
-        p.alpha = 255; p.shader = RadialGradient(x + w * 0.45f, y + eh * 0.35f, w * 0.6f, intArrayOf(Col.lighten(base, 0.3f), base), null, Shader.TileMode.CLAMP)
-        c.drawOval(inner, p); p.shader = null
-        p.style = Paint.Style.STROKE; p.strokeWidth = h * 0.035f; p.color = Col.darken(base, 0.4f)
+        p.color = 0xDCFFFFFF.toInt()
+        rect.set(face.left + w * 0.07f, face.top + h * 0.09f, face.left + w * 0.22f, face.top + h * 0.16f)
         c.drawOval(rect, p)
-        p.strokeWidth = h * 0.028f; p.color = 0xCCFFFFFF.toInt()
-        val hl = RectF(rect); hl.inset(w * 0.02f, eh * 0.06f)
-        c.drawArc(hl, 195f, 120f, false, p)
-        p.style = Paint.Style.FILL
         if (hidden) {
-            Painter.text(c, "?", x + w / 2, y + h * 0.64f, h * 0.56f, 0xFFFFD54A.toInt(), 0xFF3B1F7A.toInt(), h * 0.09f)
+            Painter.text(c, "?", x + w / 2, face.centerY() + h * 0.01f, h * 0.62f, 0xFFFFD54A.toInt(), 0xFF3B1F7A.toInt(), h * 0.1f)
             return
         }
-        // sockets
+        // holes
+        val hy = y + h * 0.42f
+        val rx = minOf(w * 0.105f, h * 0.25f); val ry = minOf(h * 0.21f, rx * 0.86f)
         for (k in -1..1) {
-            val sx = x + w / 2 + k * w * 0.26f
-            val sy = y + eh / 2
-            rect.set(sx - w * 0.1f, sy - eh * 0.27f, sx + w * 0.1f, sy + eh * 0.27f)
-            p.color = Col.alpha(Color.WHITE, 120)
-            rect.offset(0f, eh * 0.06f); c.drawOval(rect, p); rect.offset(0f, -eh * 0.06f)
-            p.alpha = 255; p.shader = RadialGradient(sx, sy - eh * 0.12f, w * 0.11f, intArrayOf(Col.darken(base, 0.82f), Col.darken(base, 0.5f)), null, Shader.TileMode.CLAMP)
-            c.drawOval(rect, p)
-            p.shader = null
-            p.style = Paint.Style.STROKE; p.strokeWidth = h * 0.024f; p.color = Col.alpha(Col.lighten(base, 0.35f), 210)
-            c.drawArc(rect, 25f, 130f, false, p)
-            p.style = Paint.Style.FILL
+            val hx = x + w / 2 + k * w * 0.27f
+            rect.set(hx - rx, hy - ry, hx + rx, hy + ry)
+            p.color = 0x78FFFFFF; rect.offset(0f, h * 0.022f); c.drawOval(rect, p); rect.offset(0f, -h * 0.022f)
+            p.alpha = 255; p.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, Col.darken(base, 0.78f), Col.darken(base, 0.45f), Shader.TileMode.CLAMP)
+            c.drawOval(rect, p); p.shader = null
         }
     }
 

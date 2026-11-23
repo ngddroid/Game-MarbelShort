@@ -13,7 +13,9 @@ import kotlin.math.sin
 class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: LevelSpec) {
     val worldW = 720f
     val cx = worldW / 2f
+    /** Marble radius on the belt and in the cups (the belt can hold 48+ marbles, so this stays small). */
     val marbleR = 12f
+    private val maxHopperR = 19f
 
     // ---- tray
     val trayCols = spec.tray.size
@@ -42,8 +44,8 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val tankTop = topInset
 
     init {
-        val belowFunnel = 46f + 2 * marbleR + 6f + 34f + 52f
-        val minFunnel = 92f; val maxFunnel = 150f
+        val belowFunnel = 46f + maxHopperR + marbleR + 6f + 34f + 52f
+        val minFunnel = 110f; val maxFunnel = 170f
         val rowsMin = 3.2f; val rowsMax = 4.3f
         val avail = worldH - bottomInset - topInset - boardPad * 2 - belowFunnel
         var c = min((worldW - 90f) / gridW, 128f)
@@ -62,16 +64,18 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val gridRight = cx + cell * gridW / 2f
 
     // ---- hopper & spout
+    /** Bigger radius for marbles that burst out of a block (path, hopper, spout); they shrink onto the belt. */
+    val hopperR = (cell * 0.16f).coerceIn(14f, maxHopperR)
     val spoutTop = gridBottom + funnelH
-    val spoutHalf = marbleR * 1.3f
+    val spoutHalf = hopperR * 1.3f
     val gateY = spoutTop + 46f
-    val gateFloor = gateY + marbleR
+    val gateFloor = gateY + hopperR
 
     // ---- belt
     val beltR = 34f
     val beltLeft = 76f
     val beltRight = 644f
-    val topRunY = gateY + marbleR * 2f + 6f
+    val topRunY = gateFloor + marbleR + 6f
     val beltCy = topRunY + beltR
     val trayTop: Float = beltCy + 52f
     val straight = (beltRight - beltLeft) - 2 * beltR
@@ -85,8 +89,9 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     fun colCenter(c: Int) = trayLeft + colW * (c + 0.5f)
     fun cupTop(index: Float) = trayTop + index * (cupH + cupGap)
 
-    val dimpleDx = floatArrayOf(-cupW * 0.26f, 0f, cupW * 0.26f)
-    val dimpleDy = cupH * 0.19f - marbleR * 0.45f
+    /** Hole centres of a cup (see MachineArt.puck): x offsets from the column centre, y from the cup top. */
+    val dimpleDx = floatArrayOf(-cupW * 0.27f, 0f, cupW * 0.27f)
+    val dimpleDy = cupH * 0.42f
 
     fun active(c: Int, r: Int) = c in 0 until gridW && r in 0 until gridH && mask[r * gridW + c]
     fun cellLeft(c: Int) = gridLeft + c * cell

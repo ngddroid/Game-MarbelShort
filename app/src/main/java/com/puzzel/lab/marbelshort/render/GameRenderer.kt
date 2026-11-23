@@ -83,10 +83,8 @@ class GameRenderer(
     private val gaugeGreen = LinearGradient(0f, l.beltCy - gh / 2, 0f, l.beltCy + gh / 2, 0xFF8EF08A.toInt(), 0xFF22A447.toInt(), Shader.TileMode.CLAMP)
     private val gaugeYellow = LinearGradient(0f, l.beltCy - gh / 2, 0f, l.beltCy + gh / 2, 0xFFFFE58A.toInt(), 0xFFF0A000.toInt(), Shader.TileMode.CLAMP)
     private val gaugeRed = LinearGradient(0f, l.beltCy - gh / 2, 0f, l.beltCy + gh / 2, 0xFFFFA07A.toInt(), 0xFFE8323F.toInt(), Shader.TileMode.CLAMP)
-    private val fogTop = l.cupTop(0.95f)
-    private val fogShader = LinearGradient(0f, fogTop, 0f, l.worldH, intArrayOf(Col.alpha(glassBottom, 0), Col.alpha(glassBottom, 70), Col.alpha(glassBottom, 175)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
-    private val fogPaint = Paint().apply { shader = fogShader }
     private var gaugeCount = -1
+    private var gaugeCap = -1
     private var gaugeLabel = ""
 
     /** Twinkling sparkles in the sky: x, y, size, phase. */
@@ -110,11 +108,13 @@ class GameRenderer(
         for (col in engine.spec.tray) for (c in col) colors += c.color
         for (c in colors) {
             sprites.marbleShadowed(c, skin, l.marbleR)
+            sprites.marbleShadowed(c, skin, l.hopperR)
             sprites.marble(c, skin, l.marbleR * 0.9f)
             sprites.block(c, 0, l.cell, skin, true); sprites.block(c, 0, l.cell, skin, false)
             sprites.cup(c, false, l.cupW, l.cupH)
         }
         sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.marbleR)
+        sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.hopperR)
         sprites.socket(l.marbleR * 1.02f)
         sprites.hub(hubR, frame)
         backdrop = layer(0f, l.worldH) { drawBackdrop(it) }
@@ -486,9 +486,9 @@ class GameRenderer(
         }
     }
 
-    private fun marbleAt(c: Canvas, x: Float, y: Float, color: Int, squash: Float = 0f) {
-        val r = l.marbleR
-        val bmp = sprites.marbleShadowed(color, skin, r)
+    private fun marbleAt(c: Canvas, x: Float, y: Float, color: Int, squash: Float = 0f, r: Float = l.marbleR) {
+        // one sprite per size class: the big one is filtered down while a marble shrinks onto the belt
+        val bmp = sprites.marbleShadowed(color, skin, if (r > l.marbleR + 0.5f) l.hopperR else l.marbleR)
         if (squash > 0f) {
             c.save(); c.scale(1f + squash * 0.22f, 1f - squash * 0.22f, x, y + r)
             dst.set(x - r * 1.35f, y - r * 1.35f, x + r * 1.35f, y + r * 1.35f)
@@ -510,18 +510,23 @@ class GameRenderer(
         c.restore()
     }
 
+    /** Radius of belt marbles: normal size, shrunk a little when extra slots make the belt very crowded. */
+    private var beltMarbleR = l.marbleR
+
     private fun drawBelt(c: Canvas) {
-        val r = l.marbleR
-        val sr = r * 1.02f
-        val sock = sprites.socket(sr)
         val cap = engine.capacity
+        val spacing = if (cap > 1) engine.slotS(1) - engine.slotS(0) else l.beltLength
+        beltMarbleR = minOf(l.marbleR, spacing * 0.47f)
+        val r = beltMarbleR
+        val sr = r * 1.02f
+        val sock = sprites.socket(l.marbleR * 1.02f)
         for (i in 0 until cap) {
             l.beltPoint(engine.slotS(i), tmp)
             dst.set(tmp[0] - sr, tmp[1] - sr, tmp[0] + sr, tmp[1] + sr)
             c.drawBitmap(sock, null, dst, bmpPaint)
         }
-        // rivets between sockets show the belt running even when it is empty
-        if (cap > 1) {
+        // rivets between sockets show the belt running even when it is empty (if there is room for them)
+        if (cap > 1 && spacing > 2 * sr + 7f) {
             val half = (engine.slotS(1) - engine.slotS(0)) / 2f
             p.reset(); p.isAntiAlias = true
             for (i in 0 until cap) {
@@ -532,7 +537,7 @@ class GameRenderer(
         }
         for (i in 0 until engine.slots.size) {
             val m = engine.slots[i] ?: continue
-            if (m.state == MarbleState.BELT) marbleAt(c, m.x, m.y, m.color, m.squash)
+            if (m.state == MarbleState.BELT) marbleAt(c, m.x, m.y, m.color, m.squash, r)
         }
         // rollers
         val hub = sprites.hub(hubR, frame)
@@ -557,7 +562,7 @@ class GameRenderer(
             p.color = 0x8CFFFFFF.toInt()
             c.drawRoundRect(dst.left + fh * 0.4f, dst.top + fh * 0.16f, (dst.right - fh * 0.4f).coerceAtLeast(dst.left + fh * 0.4f), dst.top + fh * 0.36f, fh * 0.1f, fh * 0.1f, p)
         }
-        if (engine.beltCount != gaugeCount) { gaugeCount = engine.beltCount; gaugeLabel = "$gaugeCount / $cap" }
+        if (engine.beltCount != gaugeCount || cap != gaugeCap) { gaugeCount = engine.beltCount; gaugeCap = cap; gaugeLabel = "$gaugeCount / $cap" }
         Painter.text(c, gaugeLabel, l.cx, l.beltCy + 0.5f, gh * 0.95f, Color.WHITE, 0xFF22124F.toInt(), gh * 0.2f)
     }
 
@@ -705,14 +710,17 @@ class GameRenderer(
                 c.restore()
             }
         }
-        // queue fog: rows behind the active one fade into the frosted cabinet
-        c.drawRect(l.dishLeft + rimW, fogTop, l.dishRight - rimW, l.worldH + 2f, fogPaint)
     }
 
     private fun drawLooseMarbles(c: Canvas) {
         for (m in engine.marbles) {
             if (m.state == MarbleState.BELT) continue
-            marbleAt(c, m.x, m.y, m.color)
+            val r = when (m.state) {
+                MarbleState.PATH, MarbleState.PHYSICS -> l.hopperR
+                MarbleState.BOARDING -> { val k = m.t.coerceIn(0f, 1f); l.hopperR + (beltMarbleR - l.hopperR) * k * (2f - k) }
+                else -> l.marbleR
+            }
+            marbleAt(c, m.x, m.y, m.color, r = r)
         }
     }
 

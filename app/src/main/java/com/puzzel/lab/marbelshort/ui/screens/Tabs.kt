@@ -102,7 +102,7 @@ import com.puzzel.lab.marbelshort.ui.components.LocalSound
 import com.puzzel.lab.marbelshort.ui.components.OutlinedText
 import com.puzzel.lab.marbelshort.ui.components.PopupHost
 import com.puzzel.lab.marbelshort.ui.components.ProgressTube
-import com.puzzel.lab.marbelshort.ui.components.ResourcePill
+import com.puzzel.lab.marbelshort.ui.components.CoinPill
 import com.puzzel.lab.marbelshort.ui.components.SectionCard
 import com.puzzel.lab.marbelshort.ui.components.SectionTitle
 import com.puzzel.lab.marbelshort.ui.components.SegmentedSwitch
@@ -134,7 +134,7 @@ private fun TabHeader(title: String) {
     val repo = LocalRepo.current
     Box(Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 8.dp).height(56.dp)) {
         OutlinedText(title, Modifier.align(Alignment.CenterStart), fontSize = 36.sp, brush = Grad.Snow, gloss = true, maxLines = 1)
-        ResourcePill(Ico.COIN, repo.coins.intValue.toString(), Modifier.align(Alignment.CenterEnd))
+        CoinPill(repo.coins.intValue, Modifier.align(Alignment.CenterEnd))
     }
 }
 

@@ -4,18 +4,18 @@ package com.puzzel.lab.marbelshort.level
 object MarbleColors {
     const val RAINBOW = 99
     val argb = longArrayOf(
-        0xFFFF4D5E, // 0 red
-        0xFFFFD23F, // 1 yellow
-        0xFF33C8F5, // 2 sky
-        0xFF3CCB5A, // 3 green
-        0xFF9B5CFF, // 4 purple
-        0xFFFF9F1C, // 5 orange
-        0xFFFF7AC8, // 6 pink
-        0xFF3D6BFF, // 7 blue
-        0xFFEFF3FA, // 8 white
-        0xFF9C5A2E, // 9 brown
-        0xFF1F7A4D, // 10 dark green
-        0xFF4A4E69, // 11 charcoal
+        0xFFFE5A7A, // 0 red
+        0xFFFFE000, // 1 yellow
+        0xFF1EC4FF, // 2 sky
+        0xFF13D645, // 3 green
+        0xFF9A4DFF, // 4 purple
+        0xFFFF8A00, // 5 orange
+        0xFFFF5CB8, // 6 pink
+        0xFF2F66FF, // 7 blue
+        0xFFF4F7FC, // 8 white
+        0xFFA5582A, // 9 brown
+        0xFF0F9A4E, // 10 dark green
+        0xFF474B66, // 11 charcoal
     ).map { it.toInt() }.toIntArray()
     val names = arrayOf("Red", "Yellow", "Sky", "Green", "Purple", "Orange", "Pink", "Blue", "White", "Brown", "Forest", "Charcoal")
     const val COUNT = 12
@@ -42,6 +42,22 @@ enum class Feature(val unlockLevel: Int, val title: String, val description: Str
 
     companion object {
         fun introducedAt(level: Int): Feature? = entries.firstOrNull { it.unlockLevel == level }
+
+        /** The special-block features a level contains, in unlock order (chains count as KEY, grey as PAINT). */
+        fun presentIn(spec: LevelSpec): List<Feature> {
+            val kinds = spec.blocks.map { it.kind }.toSet()
+            val out = LinkedHashSet<Feature>()
+            for (f in entries) {
+                val has = when (f) {
+                    HIDDEN_CUP -> spec.tray.any { col -> col.any { it.hidden } }
+                    KEY -> BlockKind.KEY in kinds || BlockKind.CHAINED in kinds
+                    PAINT -> BlockKind.PAINT in kinds || BlockKind.GRAY in kinds
+                    else -> kinds.any { it.name == f.name }
+                }
+                if (has) out += f
+            }
+            return out.toList()
+        }
         fun nextAfter(level: Int): Feature? = entries.firstOrNull { it.unlockLevel > level }
     }
 }

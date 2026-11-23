@@ -101,12 +101,15 @@ The whole machine is made of the same **candy glass** as the HUD:
   intentional.
 - **Lanes** (baked): one recessed glass tube per column, with a shadow on the left and a highlight
   on the right.
-- **Cups** (sprites):
-  - Body: a glossier candy puck with a saturated cylinder gradient and a vertical specular stripe.
-  - Top: a raised top lip ring with three deep sockets (inner shadow plus a lit back wall).
-  - Hidden cups: lavender, with a gold "?".
-- **Queue fog** (each frame, one gradient rect): rows below the active row fade slightly into the
-  cabinet colour, so the active row stands out.
+- **Cups** (sprites): "jelly boxes", Option A of three mockups the user chose on 2026-11-21. They
+  match the board blocks and the reference.
+  - Body: a rounded candy box in the solid marble colour, with a darker depth side, a gradient
+    face, a white bevel, a dark outline and a glint.
+  - Holes: three recessed holes in a row, each with a dark gradient and a white lower lip.
+    Marbles land centred in them (`GameLayout.dimpleDx = ±cupW·0.27`, `dimpleDy = cupH·0.42`).
+  - Hidden cups: a purple box with a gold "?".
+  - The earlier "queue fog" over the lower rows was removed: every row stays at full colour, as in
+    the approved mockup.
 
 ## 4. Performance rules
 - Everything static is baked into 3 bitmaps: backdrop, board and base. Every block, cup, socket and
@@ -114,7 +117,6 @@ The whole machine is made of the same **candy glass** as the HUD:
   - about 30 socket blits and 30 rivet dots;
   - 2 roller blits;
   - 1 gauge (3 draws);
-  - 1 fog rect;
   - 7 sparkles.
 - No per-frame `Path.op`, blur or shader allocation. Every gradient used per frame is created once
   in `init`.

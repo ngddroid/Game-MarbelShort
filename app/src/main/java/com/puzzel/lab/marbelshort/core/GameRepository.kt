@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import com.puzzel.lab.marbelshort.level.Feature
 import com.puzzel.lab.marbelshort.level.LevelGenerator
 import java.time.LocalDate
 
@@ -64,6 +65,20 @@ class GameRepository(context: Context) {
     val openedChests = mutableStateOf(decodeSet(prefs.getString("chests", "")!!))
     /** Levels unlocked early by watching a rewarded ad. */
     val adUnlockedLevels = mutableStateOf(decodeSet(prefs.getString("ad_levels", "")!!))
+
+    /**
+     * Special-block features already taught (by ordinal). The first time this version runs, features
+     * whose intro level the player has already passed count as seen, so nobody is re-taught.
+     */
+    val seenFeatures = mutableStateOf(
+        prefs.getString("seen_features", null)?.let { decodeSet(it) }
+            ?: Feature.entries.filter { it.unlockLevel < prefs.getInt("level", 1) }.map { it.ordinal }.toSet(),
+    )
+
+    fun markFeaturesSeen(fs: Collection<Feature>) {
+        seenFeatures.value = seenFeatures.value + fs.map { it.ordinal }
+        prefs.edit().putString("seen_features", encodeSet(seenFeatures.value)).apply()
+    }
 
     // daily
     val lastSpinDay = mutableStateOf(prefs.getLong("spin_day", -1))

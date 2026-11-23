@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -39,12 +40,14 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.puzzel.lab.marbelshort.BuildConfig
 import com.puzzel.lab.marbelshort.core.AdPlacement
 import com.puzzel.lab.marbelshort.core.Ads
 import com.puzzel.lab.marbelshort.core.DebugRewardedAds
 import com.puzzel.lab.marbelshort.core.Sfx
 import com.puzzel.lab.marbelshort.ui.theme.Fredoka
 import com.puzzel.lab.marbelshort.ui.theme.GameColors
+import com.puzzel.lab.marbelshort.ui.theme.Grad
 import kotlinx.coroutines.delay
 import com.puzzel.lab.marbelshort.core.Analytics
 
@@ -162,3 +165,54 @@ fun DebugAdOverlay() {
     }
 }
 
+
+
+// ---------------------------------------------------------------- debug coins
+
+/** Debug-build coin tools, opened from a coin pill's "+". Rendered once at the app root ([DebugCoinsOverlay]). */
+object DebugCoins {
+    val visible = mutableStateOf(false)
+    var openShop: (() -> Unit)? = null
+    fun open(shop: (() -> Unit)?) { openShop = shop; visible.value = true }
+}
+
+/**
+ * Coin balance pill. Release builds: "+" opens the shop when [onShop] is given (no "+" otherwise).
+ * Debug builds: every coin pill has a "+" that opens the debug coin menu (add test coins, or the shop).
+ */
+@Composable
+fun CoinPill(value: Int, modifier: Modifier = Modifier, onShop: (() -> Unit)? = null) {
+    val plus: (() -> Unit)? = if (BuildConfig.DEBUG) ({ DebugCoins.open(onShop) }) else onShop
+    ResourcePill(Ico.COIN, value.toString(), modifier, onPlus = plus)
+}
+
+/** Debug-build popup to add test coins. Does nothing in release builds. */
+@Composable
+fun DebugCoinsOverlay() {
+    if (!BuildConfig.DEBUG) return
+    val repo = LocalRepo.current
+    val sound = LocalSound.current
+    fun close() { DebugCoins.visible.value = false }
+    PopupHost(visible = DebugCoins.visible.value, onDismiss = { close() }) {
+        GamePanel("Coins", ribbon = BtnColor.Yellow, onClose = { close() }) {
+            Chip("DEBUG BUILD", BtnColor.Red)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                GameIcon(Ico.COIN, Modifier.size(40.dp))
+                Spacer(Modifier.width(8.dp))
+                OutlinedText("%,d".format(repo.coins.intValue), fontSize = 32.sp, brush = Grad.Gold, gloss = true)
+            }
+            Spacer(Modifier.height(14.dp))
+            for (amount in listOf(100, 1_000, 10_000)) {
+                GameButton("+%,d".format(amount), Modifier.fillMaxWidth(), color = BtnColor.Yellow, height = 54.dp, fontSize = 22.sp, icon = Ico.COIN, sound = Sfx.COIN) {
+                    repo.addCoins(amount)
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            DebugCoins.openShop?.let { shop ->
+                Spacer(Modifier.height(4.dp))
+                GameButton("Open Shop", Modifier.fillMaxWidth(), color = BtnColor.Purple, height = 50.dp, fontSize = 20.sp, icon = Ico.SHOP) { close(); shop() }
+            }
+        }
+    }
+}

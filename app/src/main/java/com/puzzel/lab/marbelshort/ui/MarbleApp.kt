@@ -204,6 +204,7 @@ fun MarbleApp(repo: GameRepository, sound: SoundManager, updater: InAppUpdater? 
                 )
             }
             // debug-only fake rewarded ad (no-op in release)
+            com.puzzel.lab.marbelshort.ui.components.DebugCoinsOverlay()
             com.puzzel.lab.marbelshort.ui.components.DebugAdOverlay()
         }
     }

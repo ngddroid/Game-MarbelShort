@@ -20,6 +20,9 @@ object LevelGenerator {
     const val THEME_COUNT = 5
     private const val MAX_CAPACITY = 48
     private const val MIN_CAPACITY = 14
+    private const val MAX_COLORS = 10
+    /** Levels 1..10 stay an easy tutorial. */
+    private const val TUTORIAL_LEVELS = 10
 
     class Recipe(
         val heights: IntArray,
@@ -95,33 +98,45 @@ object LevelGenerator {
     }
 
     private fun recipeFor(n: Int, rnd: Random, attempt: Int): Recipe {
-        if (n <= handmade.size) return handmade[n - 1]
+        if (n <= handmade.size) {
+            val h = handmade[n - 1]
+            if (n <= TUTORIAL_LEVELS) return h
+            // 11-30 keep their hand-made boards and feature intros, but with a tight belt and mixed cups
+            // ...and one more of each of their special blocks (the intro feature stays the star)
+            val more = h.features.mapValues { (f, c) -> if (f == Feature.KEY) c else c + 1 }
+            return Recipe(h.heights, h.colors + (if (n > 20) 1 else 0), h.trayCols, h.window + 2, if (n <= 20) 3 else 2,
+                more, h.boss, h.holes, h.walls)
+        }
         val boss = isBoss(n)
         val intro = Feature.introducedAt(n)
-        val base = 1.0 - exp(-(n - 30) / 700.0)
-        val saw = doubleArrayOf(0.0, 0.05, 0.1, 0.16, -0.08)[n % 5]
-        var d = 0.22 + 0.68 * base + saw + (if (boss) 0.18 else 0.0) + (if (n % 10 == 7) 0.08 else 0.0)
-        if (intro != null) d -= 0.15
-        d = (d - attempt * 0.06).coerceIn(0.05, 1.0)
+        // Difficulty is high right after the hand-made levels and close to the maximum by about level 60:
+        // full-size boards, 9-10 colours, only 1-2 spare belt slots and a heavily mixed cup order.
+        val base = 1.0 - exp(-(n - 30) / 15.0)
+        val saw = doubleArrayOf(0.0, 0.05, 0.1, 0.15, -0.1)[n % 5]
+        var d = 0.6 + 0.4 * base + saw + (if (boss) 0.15 else 0.0) + (if (n % 10 == 7) 0.06 else 0.0)
+        if (intro != null) d -= 0.12
+        d = (d - attempt * 0.05).coerceIn(0.05, 1.0)
 
-        val target = (12 + d * 26 + rnd.nextInt(5) - 2).roundToInt().coerceIn(9, 40)
-        val w = sqrt(target * 1.15).roundToInt().coerceIn(4, 7)
+        val target = (20 + d * 22 + rnd.nextInt(5) - 2).roundToInt().coerceIn(12, 42)
+        val w = (sqrt(target * 0.8).roundToInt() + (if (rnd.nextDouble() < 0.3) 1 else 0)).coerceIn(4, 6)
         val h = ceil(target / w.toDouble()).toInt().coerceIn(2, 7)
         val heights = shape(rnd, w, h)
         val cellsCount = heights.sum()
-        val colors = (3 + (d * 5.5).roundToInt() + rnd.nextInt(3) - 1).coerceIn(3, minOf(9, cellsCount - 2))
-        val trayCols = if (n < 45) 4 else if (rnd.nextDouble() < 0.25 + 0.45 * d) 5 else 4
-        val window = (1 + d * 7).roundToInt()
-        val margin = (14 - d * 11).roundToInt().coerceAtLeast(3) - (if (boss) 1 else 0)
-        val holes = (1 + rnd.nextInt(2 + cellsCount / 10)).coerceAtMost(cellsCount / 4)
+        val colors = (4 + (d * 6).roundToInt() + rnd.nextInt(3) - 1).coerceIn(3, minOf(MAX_COLORS, cellsCount - 2))
+        val trayCols = if (n < 45) 4 else if (rnd.nextDouble() < 0.2 + 0.3 * d) 5 else 4
+        val window = (2 + d * 9).roundToInt()
+        val margin = (4 - d * 2.5).roundToInt().coerceAtLeast(2) - (if (boss) 1 else 0)
+        val holes = rnd.nextInt(1 + cellsCount / 12).coerceAtMost(cellsCount / 6)
         val walls = if (n > 40 && rnd.nextDouble() < 0.3 + 0.4 * d) 1 + rnd.nextInt(2) else 0
 
         val features = HashMap<Feature, Int>()
         val unlocked = Feature.entries.filter { it.unlockLevel <= n }
-        val maxTypes = 1 + (d * 3).roundToInt()
+        // many special blocks and hidden cups: they hide information and lock blocks, which is what
+        // makes a level hard for a thinking player (a tighter belt mostly makes it unfair)
+        val maxTypes = 2 + (d * 3).roundToInt()
         for (f in unlocked.shuffled(rnd)) {
             if (features.size >= maxTypes) break
-            val p = (0.32 + 0.45 * d) * weight(f)
+            val p = (0.6 + 0.4 * d) * weight(f)
             if (rnd.nextDouble() < p) features[f] = countFor(f, d, rnd)
         }
         if (intro != null) features[intro] = maxOf(features[intro] ?: 0, if (intro == Feature.KEY) 1 else 2)
@@ -135,11 +150,11 @@ object LevelGenerator {
     }
 
     private fun countFor(f: Feature, d: Double, rnd: Random) = when (f) {
-        Feature.KEY, Feature.PAINT -> 1 + if (d > 0.7 && rnd.nextBoolean()) 1 else 0
+        Feature.KEY, Feature.PAINT -> 1 + rnd.nextInt(1 + (d * 2).toInt())
         Feature.BOMB, Feature.SWITCH, Feature.RAINBOW -> 1
         Feature.DOUBLE -> 1 + rnd.nextInt(2)
-        Feature.MYSTERY, Feature.HIDDEN_CUP -> 2 + rnd.nextInt(2 + (d * 4).toInt())
-        else -> 1 + rnd.nextInt(1 + (d * 2.5).toInt())
+        Feature.MYSTERY, Feature.HIDDEN_CUP -> 3 + rnd.nextInt(3 + (d * 6).toInt())
+        else -> 2 + rnd.nextInt(2 + (d * 5).toInt())
     }
 
     private fun shape(rnd: Random, w: Int, h: Int): IntArray {
@@ -235,8 +250,8 @@ object LevelGenerator {
         order.forEachIndexed { i, s -> s.id = i + 1 }
 
         // 2. Colours.
-        val colorCount = recipe.colors.coerceIn(2, minOf(9, total))
         val paletteChoices = (0 until MarbleColors.COUNT).filter { n >= 60 || it < 8 }.shuffled(rnd)
+        val colorCount = recipe.colors.coerceIn(2, minOf(MAX_COLORS, total, paletteChoices.size))
         val palette = paletteChoices.take(colorCount)
         val colorSeq = ArrayList<Int>(total)
         palette.forEach { colorSeq += it }
@@ -254,7 +269,7 @@ object LevelGenerator {
             val keyCands = free { i, _ -> i < total - 2 && i < total * 0.6 }
             if (keyCands.isEmpty()) return@repeat
             val k = keyCands[rnd.nextInt(keyCands.size)]
-            val chained = free { i, _ -> i > k + 1 }.shuffled(rnd).take(1 + rnd.nextInt(3))
+            val chained = free { i, _ -> i > k + 1 }.shuffled(rnd).take(2 + rnd.nextInt(3))
             if (chained.isEmpty()) return@repeat
             order[k].kind = BlockKind.KEY; order[k].param = lockId
             chained.forEach { order[it].kind = BlockKind.CHAINED; order[it].param = lockId }
@@ -343,7 +358,7 @@ object LevelGenerator {
             if (!planIds.all { verify.tapId(it) } || !verify.solved) continue
             val peak = verify.peakLoad
             if (peak + 2 > MAX_CAPACITY) continue
-            val capacity = (peak + recipe.margin).coerceIn(maxOf(MIN_CAPACITY, peak + 2), MAX_CAPACITY)
+            val capacity = (peak + recipe.margin).coerceIn(maxOf(MIN_CAPACITY, peak), MAX_CAPACITY)
             return makeSpec(n, recipe, w, h, mask, slots, trayCols, capacity, planIds, colorCount, openTimers = false)
         }
         return null

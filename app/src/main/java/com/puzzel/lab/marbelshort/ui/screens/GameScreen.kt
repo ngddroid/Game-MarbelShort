@@ -17,6 +17,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -101,7 +102,7 @@ import com.puzzel.lab.marbelshort.ui.components.LocalRepo
 import com.puzzel.lab.marbelshort.ui.components.LocalSound
 import com.puzzel.lab.marbelshort.ui.components.OutlinedText
 import com.puzzel.lab.marbelshort.ui.components.PopupHost
-import com.puzzel.lab.marbelshort.ui.components.ResourcePill
+import com.puzzel.lab.marbelshort.ui.components.CoinPill
 import com.puzzel.lab.marbelshort.ui.components.Ribbon
 import com.puzzel.lab.marbelshort.ui.components.SparklePath
 import com.puzzel.lab.marbelshort.ui.components.SunRays
@@ -120,7 +121,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import com.puzzel.lab.marbelshort.core.Analytics
 
-private enum class Overlay { NONE, INTRO, PAUSE, WIN, FAIL, BUY }
+private enum class Overlay { NONE, INTRO, TUTORIAL, PAUSE, WIN, FAIL, BUY }
 
 private val PopupText = TextStyle(fontFamily = Fredoka, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = GameColors.Ink, textAlign = TextAlign.Center, lineHeight = 23.sp)
 
@@ -132,7 +133,12 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
     val density = LocalDensity.current
     val statusTop = WindowInsets.statusBars.getTop(density)
 
-    var overlay by remember(screen) { mutableStateOf(if (spec.introduces != null) Overlay.INTRO else Overlay.NONE) }
+    // Special blocks the player has never been taught: a "New!" card for each, then (once the board has
+    // assembled) a spotlight tutorial on a real one, then play starts.
+    val newFeatures = remember(screen) { Feature.presentIn(spec).filter { it.ordinal !in repo.seenFeatures.value } }
+    var introIndex by remember(screen) { mutableIntStateOf(0) }
+    var tutorialIndex by remember(screen) { mutableIntStateOf(-1) }   // -1 = not started, size = done
+    var overlay by remember(screen) { mutableStateOf(if (newFeatures.isNotEmpty()) Overlay.INTRO else Overlay.NONE) }
     var comboCount by remember { mutableIntStateOf(0) }
     var comboStamp by remember { mutableLongStateOf(0L) }
     var hammerMode by remember { mutableStateOf(false) }
@@ -172,11 +178,13 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
             var last = 0L
             while (isActive) {
                 withFrameNanos { now ->
-                    if (last != 0L && overlay != Overlay.PAUSE && overlay != Overlay.INTRO && overlay != Overlay.BUY) {
+                    if (last != 0L && overlay != Overlay.PAUSE && overlay != Overlay.INTRO && overlay != Overlay.TUTORIAL && overlay != Overlay.BUY) {
                         engine.update((now - last) / 1_000_000_000f)
                     }
                     last = now
                     frame.longValue = now
+                    // the board has assembled: start the spotlight tutorial for the new special blocks
+                    if (tutorialIndex in newFeatures.indices && overlay == Overlay.NONE && !engine.inIntro) overlay = Overlay.TUTORIAL
                 }
                 if (!resultHandled && engine.status != GameStatus.PLAYING) {
                     resultHandled = true
@@ -253,7 +261,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
                 }
                 LevelBadge(spec.number, screen.daily, spec.isBoss, Modifier.align(Alignment.TopCenter).offset(x = (-14).dp, y = 2.dp))
                 val coinsShown by animateIntAsState(repo.coins.intValue, tween(700), label = "coins")
-                ResourcePill(Ico.COIN, coinsShown.toString(), Modifier.align(Alignment.CenterEnd))
+                CoinPill(coinsShown, Modifier.align(Alignment.CenterEnd))
             }
             Spacer(Modifier.height(8.dp))
             BoosterTray {
@@ -299,7 +307,29 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
 
         // ---------------- overlays (each animates in and out)
         PopupHost(visible = overlay == Overlay.INTRO) {
-            spec.introduces?.let { f -> FeatureIntroContent(f) { overlay = Overlay.NONE } }
+            newFeatures.getOrNull(introIndex)?.let { f ->
+                val lastCard = introIndex == newFeatures.size - 1
+                FeatureIntroContent(f, step = if (newFeatures.size > 1) "${introIndex + 1} / ${newFeatures.size}" else null,
+                    button = if (lastCard) "Show me!" else "Next") {
+                    if (lastCard) { overlay = Overlay.NONE; tutorialIndex = 0 } else introIndex++
+                }
+            }
+        }
+        if (overlay == Overlay.TUTORIAL) {
+            newFeatures.getOrNull(tutorialIndex)?.let { f ->
+                frame.longValue
+                val lastStep = tutorialIndex == newFeatures.size - 1
+                FeatureTutorial(f, engine.featureTarget(f), scale, lastStep,
+                    step = if (newFeatures.size > 1) "${tutorialIndex + 1} / ${newFeatures.size}" else null,
+                    hudBottom = with(density) { hudPx.toDp() }) {
+                    sound.play(Sfx.BUTTON)
+                    if (lastStep) {
+                        repo.markFeaturesSeen(newFeatures)
+                        tutorialIndex = newFeatures.size
+                        overlay = Overlay.NONE
+                    } else tutorialIndex++
+                }
+            }
         }
         PopupHost(visible = overlay == Overlay.PAUSE, onDismiss = { overlay = Overlay.NONE }) {
             PauseContent(
@@ -471,8 +501,9 @@ private fun Pedestal(modifier: Modifier, glow: Color = Color(0xFFFFE680), conten
 }
 
 @Composable
-private fun FeatureIntroContent(f: Feature, onOk: () -> Unit) {
+private fun FeatureIntroContent(f: Feature, step: String? = null, button: String = "Got it!", onOk: () -> Unit) {
     GamePanel("New!", ribbon = BtnColor.Pink, rays = true) {
+        step?.let { Chip(it, BtnColor.Purple); Spacer(Modifier.height(4.dp)) }
         Pedestal(Modifier.size(170.dp)) {
             val sprites = remember { SpriteCache(1f) }
             DisposableEffect(sprites) { onDispose { sprites.clear() } }
@@ -503,7 +534,64 @@ private fun FeatureIntroContent(f: Feature, onOk: () -> Unit) {
         Spacer(Modifier.height(6.dp))
         Text(f.description, style = PopupText)
         Spacer(Modifier.height(18.dp))
-        GameButton("Got it!", Modifier.fillMaxWidth(), color = BtnColor.Green, shine = true) { onOk() }
+        GameButton(button, Modifier.fillMaxWidth(), color = BtnColor.Green, shine = true) { onOk() }
+    }
+}
+
+/** How-to line for the spotlight tutorial (the "New!" card already gave the short description). */
+private fun tutorialTip(f: Feature): String = when (f) {
+    Feature.MYSTERY -> "This block hides its colour. Clear a way out for it and its colour appears!"
+    Feature.COUNTER -> "Caged! Pop the number of blocks shown on the cage and it opens."
+    Feature.HIDDEN_CUP -> "This cup hides its colour. It shows once the cup reaches the top of its column."
+    Feature.KEY -> "Pop this key block to break every chain. Chained blocks can't be popped before that!"
+    Feature.ARROW -> "Arrow blocks can also slide out the way the arrow points, if that side is clear."
+    Feature.CRATE -> "Fill the number of cups shown on the crate and it opens."
+    Feature.DOUBLE -> "x2 holds 18 marbles. Make sure the funnel and belt have room before you pop it!"
+    Feature.ICE -> "Tap once to crack the ice, then tap again to pop the block."
+    Feature.RAINBOW -> "Rainbow marbles fit any cup. Save them for the colours you can't reach!"
+    Feature.BOMB -> "Pop the bomb before its number reaches zero. Every move counts down!"
+    Feature.PAINT -> "Pop the paint bucket to colour all the grey blocks with its colour."
+    Feature.SWITCH -> "Popping this switch flips the belt's direction."
+}
+
+/**
+ * Spotlight tutorial for one special block: the board dims, a real block of that kind (or a hidden
+ * cup) is ringed and pointed at, and a card explains how it works. The game is paused meanwhile.
+ */
+@Composable
+private fun BoxWithConstraintsScope.FeatureTutorial(
+    f: Feature, target: FloatArray?, scale: Float, last: Boolean, step: String?, hudBottom: androidx.compose.ui.unit.Dp, onNext: () -> Unit,
+) {
+    val pulse by rememberInfiniteTransition(label = "spot").animateFloat(0f, 1f, infiniteRepeatable(tween(1200, easing = LinearEasing)), label = "p")
+    val hPx = constraints.maxHeight.toFloat()
+    Box(Modifier.fillMaxSize().pointerInput(Unit) { awaitEachGesture { awaitFirstDown().consume() } }) {
+        Canvas(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = androidx.compose.ui.graphics.CompositingStrategy.Offscreen }) {
+            drawRect(Color(0xB81A0B4A))
+            if (target != null) {
+                val c = Offset(target[0] * scale, target[1] * scale); val r = target[2] * scale
+                drawCircle(Color.Black, r, c, blendMode = androidx.compose.ui.graphics.BlendMode.Clear)
+                drawCircle(Color.White.copy(alpha = 1f - pulse), r * (1f + 0.4f * pulse), c, style = Stroke(4.dp.toPx()))
+                drawCircle(Color(0xFFFFD54A), r, c, style = Stroke(3.5.dp.toPx()))
+            }
+        }
+        if (target != null) HandPointer(Modifier.offset { IntOffset((target[0] * scale).toInt() - 6, (target[1] * scale).toInt() - 6) })
+        val cardAtBottom = target == null || target[1] * scale < hPx * 0.5f
+        Column(
+            Modifier.align(if (cardAtBottom) Alignment.BottomCenter else Alignment.TopCenter)
+                .padding(start = 20.dp, end = 20.dp, top = if (cardAtBottom) 0.dp else hudBottom + 12.dp, bottom = if (cardAtBottom) 36.dp else 0.dp)
+                .fillMaxWidth()
+                .background(Color.White, RoundedCornerShape(26.dp))
+                .border(3.dp, GameColors.Purple500, RoundedCornerShape(26.dp))
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            step?.let { Chip(it, BtnColor.Purple); Spacer(Modifier.height(6.dp)) }
+            OutlinedText(f.title, fontSize = 26.sp, brush = Grad.Gold, gloss = true)
+            Spacer(Modifier.height(6.dp))
+            Text(tutorialTip(f), style = PopupText)
+            Spacer(Modifier.height(14.dp))
+            GameButton(if (last) "Let's play!" else "Next", Modifier.fillMaxWidth(), color = BtnColor.Green, height = 56.dp, fontSize = 22.sp, shine = true) { onNext() }
+        }
     }
 }
 

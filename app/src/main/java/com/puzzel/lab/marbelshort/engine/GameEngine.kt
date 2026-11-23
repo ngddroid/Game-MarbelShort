@@ -4,6 +4,7 @@ import com.puzzel.lab.marbelshort.core.Sfx
 import com.puzzel.lab.marbelshort.level.BlockKind
 import com.puzzel.lab.marbelshort.level.BlockState
 import com.puzzel.lab.marbelshort.level.Board
+import com.puzzel.lab.marbelshort.level.Feature
 import com.puzzel.lab.marbelshort.level.LevelSpec
 import com.puzzel.lab.marbelshort.level.MarbleColors
 import com.puzzel.lab.marbelshort.level.TapOutcome
@@ -116,6 +117,8 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
     private var lastCupTime = -10f
     private var lastDropTime = 0f
     private var lastClack = 0f
+    /** Silences physics sounds while [measureFunnel] runs. */
+    private var muted = false
     private var pendingEnd = -1f
     private var pendingStatus = GameStatus.PLAYING
     private val tmp = FloatArray(2)
@@ -158,6 +161,8 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
             listener.haptic(Haptic.LIGHT)
             return
         }
+        val cracksOnly = v.state.spec.kind == BlockKind.ICE && !v.state.cracked
+        if (!cracksOnly && !funnelHasRoom(v.state)) { refuseFull(v); return }
         listener.sound(Sfx.TAP, 1f + Random.nextFloat() * 0.1f)
         val path = if (board.exposed[i]) board.pathOut(i) else null
         when (board.tap(i)) {
@@ -171,6 +176,39 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
             TapOutcome.NONE -> {}
         }
         afterMove()
+    }
+
+    /**
+     * A block releases all of its balls at once, or none: it may only be popped when the funnel (up to
+     * the line under the board) has room for every one of them. Otherwise the block stays closed and the
+     * tap shows "WAIT!". An empty funnel always takes a block, even an x2 block bigger than the funnel.
+     */
+    fun funnelHasRoom(st: BlockState): Boolean {
+        if (pileAtLine()) return false
+        var load = 0
+        for (m in marbles) if (m.state == MarbleState.PATH || m.state == MarbleState.PHYSICS) load++
+        for (f in flying) load += f.state.spec.marbleCount
+        return load == 0 || load + st.spec.marbleCount <= hopperCap
+    }
+
+    /** The settled pile in the funnel has reached the line under the board somewhere (e.g. a corner). */
+    private fun pileAtLine(): Boolean {
+        val top = layout.gridBottom + layout.hopperR * 0.15f
+        for (m in marbles) if (m.state == MarbleState.PHYSICS && m.age > 0.5f && m.y < top) return true
+        return false
+    }
+
+    private var lastFullHint = -10f
+
+    /** Feedback for a tap refused because the funnel is full: the block wobbles and "WAIT!" shows over the funnel. */
+    private fun refuseFull(v: BlockVisual) {
+        v.shake = 0.6f
+        listener.sound(Sfx.TAP, 0.75f, 0.5f)
+        listener.haptic(Haptic.LIGHT)
+        if (time - lastFullHint > 0.9f) {
+            lastFullHint = time
+            texts += FloatingText("WAIT!", layout.cx, layout.spoutTop - layout.funnelH * 0.55f, 0xFFFFFFFF.toInt(), 30f)
+        }
     }
 
     private fun afterMove() {
@@ -262,8 +300,8 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
         val n = st.spec.marbleCount
         for (k in 0 until n) {
             val m = Marble(st.spec.marbleColor)
-            m.x = l.cx + ((k % 5) - 2) * l.marbleR * 2.1f
-            m.y = l.gridBottom + 4f - (k / 5) * l.marbleR * 2f
+            m.x = l.cx + ((k % 5) - 2) * l.hopperR * 2.1f
+            m.y = l.gridBottom + 4f - (k / 5) * l.hopperR * 2f
             m.px = m.x; m.py = m.y - 1f
             marbles += m
         }
@@ -281,6 +319,7 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
         val i = cellAt(wx, wy)
         if (i < 0) return false
         val v = visuals[i] ?: return false
+        if (!funnelHasRoom(v.state)) { refuseFull(v); return false }
         val path = if (board.exposed[i]) board.pathOut(i) else null
         board.tap(i, force = true)
         shake = 10f
@@ -324,6 +363,7 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
             if (placed) moved++
         }
         if (moved > 0) {
+            beltCount = slots.count { it != null }
             boostersUsed++
             listener.sound(Sfx.REWARD, 1.2f, 0.8f)
             texts += FloatingText("MAGNET!", layout.cx, layout.beltCy - 20f, 0xFFFFFFFF.toInt(), 32f)
@@ -484,11 +524,39 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
         }
     }
 
-    /** How many loose marbles the hopper holds before streams wait in the board. */
-    private val hopperCap: Int = run {
+    /**
+     * How many balls the funnel really holds (below its top edge, with the gate closed). Measured once
+     * per level by dropping test balls through the real physics, silently and before play starts, so it
+     * is right for every board width, funnel height and ball size. Blocks only release balls that fit
+     * (see [funnelHasRoom]), so balls never pile up in the board.
+     */
+    val hopperCap: Int = measureFunnel()
+
+    private fun measureFunnel(): Int {
         val l = layout
-        val area = (l.gridRight - l.gridLeft + l.spoutHalf * 2) * 0.5f * l.funnelH + l.spoutHalf * 2 * (l.gateFloor - l.spoutTop)
-        (area / (4 * l.marbleR * l.marbleR) * 0.72f).toInt().coerceIn(14, 60)
+        val saved = ArrayList(marbles)
+        val t0 = time; val clack0 = lastClack
+        marbles.clear(); muted = true
+        // drop test balls spread across the funnel (golden-ratio steps) and let each one settle; the
+        // funnel is full once the settled pile reaches its top edge (the line under the board)
+        val r = l.hopperR
+        val span = (l.gridRight - l.gridLeft - 2 * r).coerceAtLeast(1f)
+        var cap = 0
+        for (k in 0 until 120) {
+            val m = Marble(0)
+            m.state = MarbleState.PHYSICS
+            m.x = l.gridLeft + r + ((k * 0.618034f) % 1f) * span
+            m.y = l.gridBottom - r
+            m.px = m.x; m.py = m.y - 1f
+            marbles += m
+            repeat(45) { physics(1f / 60f) }
+            if (marbles.any { it.y < l.gridBottom + r * 0.25f }) break
+            cap = k + 1
+        }
+        marbles.clear(); marbles.addAll(saved)
+        time = t0; lastClack = clack0; muted = false
+        // keep a little slack: balls arriving from the side exits need a moment to roll into place
+        return (cap - maxOf(1, cap / 15)).coerceAtLeast(1)
     }
 
     /** Marbles gliding through empty cells towards the exit. */
@@ -516,7 +584,10 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
                 inHopper++
                 m.state = MarbleState.PHYSICS
                 m.wp = null
-                m.px = m.x; m.py = m.y - 5f
+                // leave the exit rolling toward the middle, so the funnel fills from the centre outward and
+                // balls from the side exits don't stack up in the corners
+                val inward = ((layout.cx - m.x) / (layout.gridRight - layout.cx)).coerceIn(-1f, 1f) * 3.2f
+                m.px = m.x - inward; m.py = m.y - 5f
             }
         }
     }
@@ -528,10 +599,25 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
         val sub = 3
         val h = dt / sub
         val g = 2300f * h * h
-        val r = layout.marbleR
+        val r = layout.hopperR
         val d2 = 4 * r * r
         val l = layout
         repeat(sub) {
+            // Anti-jam: while the pipe is empty, the lowest ball in the funnel leads. It is steered to the
+            // pipe centre and the others give way to it, so two big balls can never wedge side by side
+            // (an "arch") over the pipe mouth.
+            var lead: Marble? = null
+            var pipeBusy = false
+            for (m in physicsList) {
+                if (m.y > l.spoutTop - r * 0.25f) { pipeBusy = true; break }
+                if (m.y > l.gridBottom && (lead == null || m.y > lead.y)) lead = m
+            }
+            if (pipeBusy) lead = null
+            lead?.let { m ->
+                val f = ((m.y - l.gridBottom) / (l.spoutTop - l.gridBottom)).coerceIn(0f, 1f)
+                val nx = ((l.cx - m.x) * (0.03f + 0.17f * f)).coerceIn(-2.5f, 2.5f)
+                m.x += nx; m.px += nx
+            }
             for (m in physicsList) {
                 val vx = ((m.x - m.px) * 0.995f).coerceIn(-9f, 9f)
                 val vy = ((m.y - m.py) * 0.995f).coerceIn(-2f, 12f)
@@ -540,8 +626,20 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
                 m.age += h
                 if (m.y > l.gridBottom) {
                     val f = ((m.y - l.gridBottom) / (l.spoutTop - l.gridBottom)).coerceIn(0f, 1f)
-                    m.x += ((l.cx - m.x) * (0.004f + 0.02f * f)).coerceIn(-0.8f, 0.8f)
-                    if (abs(vx) + abs(vy) < 0.12f && m.y < l.gateY - 3f) {
+                    // Near the pipe mouth only, a gentle creep to the middle (moved with px too, so it never builds
+                    // up into a sideways "gravity"). Elsewhere real gravity rolls balls down the slopes, so the
+                    // funnel fills its whole width up to the line instead of stacking in a tower.
+                    if (f > 0.6f) {
+                        val dx = ((l.cx - m.x) * 0.01f).coerceIn(-0.25f, 0.25f)
+                        m.x += dx; m.px += dx
+                    }
+                    // a ball pushed above the funnel's top edge (up into the board) is eased inward and down
+                    if (m.y < l.gridBottom - r * 0.2f) {
+                        val dx = (l.cx - m.x).coerceIn(-0.7f, 0.7f)
+                        m.x += dx; m.px += dx * 0.5f
+                    }
+                    // nudge only real stalls (nothing in the pipe); balls queuing behind a busy pipe stay put
+                    if (!pipeBusy && abs(vx) + abs(vy) < 0.12f && m.y < l.gateY - 3f) {
                         m.stuckT += h
                         if (m.stuckT > 0.18f) {
                             val nx = ((l.cx - m.x) * 0.25f).coerceIn(-6f, 6f) + (Random.nextFloat() - 0.5f) * 2f
@@ -564,9 +662,12 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
                             val d = sqrt(dd)
                             val soft = if (ma.y > l.gridBottom + r && mb.y > l.gridBottom + r) 0.32f else 0.5f
                             val push = (2 * r - d) * soft / d
-                            ma.x -= dx * push; ma.y -= dy * push
-                            mb.x += dx * push; mb.y += dy * push
-                            if (push * d > 2.5f && time - lastClack > 0.06f) {
+                            // the leading ball holds its place; the other one takes the whole push
+                            val wa = if (ma === lead) 0f else if (mb === lead) 2f else 1f
+                            val wb = 2f - wa
+                            ma.x -= dx * push * wa; ma.y -= dy * push * wa
+                            mb.x += dx * push * wb; mb.y += dy * push * wb
+                            if (!muted && push * d > 2.5f && time - lastClack > 0.06f) {
                                 lastClack = time
                                 listener.sound(Sfx.CLACK, 0.9f + Random.nextFloat() * 0.5f, 0.22f)
                             }
@@ -596,7 +697,7 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
                 val d = sqrt(dd)
                 val pen = r - d
                 m.x += dx / d * pen; m.y += dy / d * pen
-                if (pen > 3f && time - lastClack > 0.08f) {
+                if (!muted && pen > 3f && time - lastClack > 0.08f) {
                     lastClack = time
                     listener.sound(Sfx.CLACK, 0.8f + Random.nextFloat() * 0.3f, 0.18f)
                 }
@@ -609,12 +710,26 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
             m.x = m.x.coerceIn(l.cx - halfW + r * 0.7f, l.cx + halfW - r * 0.7f)
         }
         if (m.y > l.gateFloor - r) m.y = l.gateFloor - r
+        // a ball that has been in the funnel a moment can't be squeezed up into the board
+        if (m.age > 0.4f && m.y < l.gridBottom - r * 0.2f) { m.y = l.gridBottom - r * 0.2f; if (m.py < m.y) m.py = m.y }
     }
 
     fun slotS(i: Int): Float = i * spacing + beltOffset
 
+    /**
+     * The belt runs at 2x while no ball can board: either nothing is waiting in the board/funnel
+     * (every released ball is already on the belt), or balls are waiting but the belt is full.
+     * It eases back to normal speed as soon as a waiting ball could take a free slot.
+     */
+    private fun beltBoost(): Float {
+        if (beltCount == 0) return 1f
+        var waiting = false
+        for (m in marbles) if (m.state == MarbleState.PHYSICS || m.state == MarbleState.PATH) { waiting = true; break }
+        return if (!waiting || beltCount >= capacity) BELT_BOOST else 1f
+    }
+
     private fun updateBelt(dt: Float) {
-        beltVel += (beltDir * beltSpeed - beltVel) * min(1f, dt * 2.5f)
+        beltVel += (beltDir * beltSpeed * beltBoost() - beltVel) * min(1f, dt * 2.5f)
         beltOffset = (beltOffset + beltVel * dt) % layout.beltLength
         val l = layout
         var i0 = ((-beltOffset) / spacing).roundToInt() % capacity
@@ -835,15 +950,45 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
 
     // ============================================================ results & hints
 
-    val stars: Int get() {
-        val ratio = peakBelt / capacity.toFloat()
-        var s = when { ratio <= 0.62f -> 3; ratio <= 0.86f -> 2; else -> 1 }
-        if (boostersUsed > 0) s = min(s, 2)
-        if (continued) s = 1
-        return s
+    /**
+     * 3 stars: won without boosters and the belt never got completely full.
+     * 2 stars: a booster was used, or the belt filled up at some point (a close call).
+     * 1 star:  "Continue" was used after a fail.
+     * (A fixed belt-fill percentage no longer works: harder levels leave only ~2 spare slots, so even
+     * perfect play reaches ~90% of the belt.)
+     */
+    val stars: Int get() = when {
+        continued -> 1
+        boostersUsed > 0 || peakBelt >= capacity -> 2
+        else -> 3
     }
 
     fun coinReward(): Int = (10 + spec.number / 40).coerceAtMost(60) + stars * 3 + comboCoins + (if (spec.isBoss) 25 else 0)
+
+    /**
+     * World position (x, y, radius) of something showing [f], for the feature tutorial spotlight:
+     * a block of that kind (an open one if possible), or the highest visible hidden cup.
+     */
+    fun featureTarget(f: Feature): FloatArray? {
+        val l = layout
+        if (f == Feature.HIDDEN_CUP) {
+            var best: FloatArray? = null
+            for ((ci, col) in tray.withIndex()) for (cup in col.cups) {
+                if (!cup.hidden) continue
+                val y = l.cupTop(cup.display) + l.cupH / 2
+                if (y < l.worldH - l.cupH && (best == null || y < best[1])) best = floatArrayOf(l.colCenter(ci), y, l.colW * 0.55f)
+            }
+            return best
+        }
+        val kind = when (f) { Feature.KEY -> BlockKind.KEY; Feature.PAINT -> BlockKind.PAINT; else -> BlockKind.entries.firstOrNull { it.name == f.name } } ?: return null
+        var pick: BlockVisual? = null
+        for (v in visuals) {
+            if (v == null || v.state.spec.kind != kind) continue
+            if (pick == null || (board.exposed[v.index] && !board.exposed[pick.index]) || (board.exposed[v.index] == board.exposed[pick.index] && v.row < pick.row)) pick = v
+        }
+        val v = pick ?: return null
+        return floatArrayOf(l.cellCenterX(v.col), l.cellCenterY(v.row.toFloat()), l.cell * 0.62f)
+    }
 
     /** World centre of a suggested block to tap (tutorial hand). */
     fun hintTarget(): FloatArray? {
@@ -860,6 +1005,8 @@ class GameEngine(val spec: LevelSpec, val layout: GameLayout, private val listen
 
     companion object {
         const val INTRO_MACHINE = 0.55f
+        /** Belt speed multiplier while no ball can board (see beltBoost). */
+        const val BELT_BOOST = 2f
         fun easeOut(t: Float) = 1 - (1 - t) * (1 - t)
     }
 }
