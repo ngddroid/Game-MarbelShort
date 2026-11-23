@@ -1,5 +1,18 @@
 package com.puzzel.lab.marbelshort.ui.screens
 
+import android.content.Intent
+import android.Manifest
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.DisposableEffect
+import androidx.core.app.ActivityCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.puzzel.lab.marbelshort.core.Analytics
+import com.puzzel.lab.marbelshort.core.Notifications
+import com.puzzel.lab.marbelshort.core.Push
 import android.annotation.SuppressLint
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
@@ -84,6 +97,32 @@ fun SettingsScreen(nav: Nav) {
     val sound = LocalSound.current
     val context = LocalContext.current
     var confirmReset by remember { mutableStateOf(false) }
+
+    // notifications: is the game allowed to post at all? Re-checked whenever we come back from system settings.
+    var systemAllowed by remember { mutableStateOf(Notifications.canPost(context)) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val obs = LifecycleEventObserver { _, e -> if (e == Lifecycle.Event.ON_RESUME) systemAllowed = Notifications.canPost(context) }
+        lifecycle.addObserver(obs)
+        onDispose { lifecycle.removeObserver(obs) }
+    }
+    val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        Analytics.notificationPermission(granted)
+        systemAllowed = Notifications.canPost(context)
+    }
+    /** Ask for the permission while Android still shows the dialog; after that, send the player to system settings. */
+    fun allowNotifications() {
+        if (Notifications.canPost(context)) return
+        val activity = context as? Activity
+        val canAsk = Notifications.needsRuntimePermission(context) && activity != null &&
+            (!repo.notifPermissionAsked.value || ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.POST_NOTIFICATIONS))
+        if (canAsk) {
+            repo.markNotifPermissionAsked()
+            permLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            runCatching { context.startActivity(Notifications.systemSettingsIntent(context)) }
+        }
+    }
     val version = remember {
         try { context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0" } catch (_: Exception) { "1.0" }
     }
@@ -103,7 +142,28 @@ fun SettingsScreen(nav: Nav) {
                     RowDivider()
                     ToggleRow(Ico.VIBRATE, "Vibration", repo.hapticsOn.value, BtnColor.Purple) { repo.setHaptics(it); if (it) sound?.haptic(Haptic.MEDIUM) }
                 }
-                SettingsGroup("Legal", Ico.SHIELD) {
+                SettingsGroup("Notifications", Ico.CALENDAR) {
+                    ToggleRow(Ico.GIFT, "News & Events", repo.pushOn.value, BtnColor.Pink) { on ->
+                        repo.setPushOn(on); Push.sync(context); Analytics.settingChanged("push", on)
+                        if (on) allowNotifications()
+                    }
+                    if (!systemAllowed) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Notifications are blocked for this game. Tap here to allow them.",
+                            style = Hint.copy(color = GameColors.Purple700),
+                            modifier = Modifier.clickable { allowNotifications() },
+                        )
+                    }
+                }
+                SettingsGroup("Privacy & Legal", Ico.SHIELD) {
+                    ToggleRow(Ico.SPARK, "Share Usage Data", repo.shareData.value, BtnColor.Blue) { on ->
+                        if (!on) Analytics.settingChanged("share_data", false)
+                        repo.setShareData(on); Analytics.setCollectionEnabled(on)
+                    }
+                    Text("Anonymous gameplay stats and crash reports help us fix bugs and balance levels. No ads, no personal info.", style = Hint)
+                    Spacer(Modifier.height(4.dp))
+                    RowDivider()
                     LinkRow(Ico.DOC, BtnColor.Purple, "Terms of Service") { nav.go(Screen.Legal("terms")) }
                     RowDivider()
                     LinkRow(Ico.SHIELD, BtnColor.Green, "Privacy Policy") { nav.go(Screen.Legal("privacy")) }
@@ -118,7 +178,7 @@ fun SettingsScreen(nav: Nav) {
                     Image(painterResource(R.drawable.ic_splash_logo), contentDescription = null, modifier = Modifier.size(120.dp).floaty(4.dp, 3000))
                     OutlinedText("Marble Pop Factory", Modifier.padding(top = 0.dp), fontSize = 24.sp, brush = Grad.Gold, gloss = true)
                     Spacer(Modifier.height(4.dp))
-                    Text("Version $version  ·  Puzzel Lab", style = Hint.copy(color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center))
+                    Text("Version $version  ·  NG Studio", style = Hint.copy(color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Center))
                 }
                 Spacer(Modifier.height(24.dp))
             }
@@ -215,8 +275,16 @@ fun LegalScreen(page: String, onBack: () -> Unit) {
                             settings.allowFileAccess = false
                             webViewClient = object : WebViewClient() {
                                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                                    val url = request?.url?.toString() ?: return true
-                                    return !url.startsWith("file:///android_asset/")
+                                    val uri = request?.url ?: return true
+                                    if (uri.toString().startsWith("file:///android_asset/")) return false
+                                    // Developer contact links open the phone's email / dialer app; everything else stays blocked.
+                                    val action = when (uri.scheme) {
+                                        "mailto" -> Intent.ACTION_SENDTO
+                                        "tel" -> Intent.ACTION_DIAL
+                                        else -> return true
+                                    }
+                                    runCatching { view?.context?.startActivity(Intent(action, uri)) }
+                                    return true
                                 }
                             }
                             loadUrl("file:///android_asset/legal/$page.html")

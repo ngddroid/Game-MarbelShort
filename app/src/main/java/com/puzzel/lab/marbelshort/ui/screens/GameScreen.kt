@@ -118,6 +118,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
+import com.puzzel.lab.marbelshort.core.Analytics
 
 private enum class Overlay { NONE, INTRO, PAUSE, WIN, FAIL, BUY }
 
@@ -142,6 +143,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
     var winCoins by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(toast) { if (toast != null) { delay(1600); toast = null } }
+    LaunchedEffect(screen) { Analytics.levelStart(spec.number, screen.daily, spec.isBoss) }
 
     val listener = remember {
         object : GameListener {
@@ -191,10 +193,12 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
                         repo.addStat(Stat.LEVELS_WON, 1)
                         if (winStars == 3) repo.addStat(Stat.THREE_STARS, 1)
                         if (spec.isBoss) repo.addStat(Stat.BOSS_WINS, 1)
+                        Analytics.levelWin(spec.number, screen.daily, winStars, winCoins, engine.maxCombo, engine.boostersUsed)
                         delay(500)
                         sound.play(Sfx.WIN)
                         overlay = Overlay.WIN
                     } else {
+                        Analytics.levelFail(spec.number, screen.daily, engine.failReason.name.lowercase(), engine.boostersUsed)
                         delay(450)
                         sound.play(Sfx.FAIL)
                         overlay = Overlay.FAIL
@@ -216,6 +220,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
                             if (hammerMode) {
                                 if (engine.hammer(wx, wy)) {
                                     repo.addBooster(Booster.HAMMER, -1)
+                                    Analytics.boosterUsed("hammer", spec.number)
                                     hammerMode = false
                                 }
                             } else engine.tap(wx, wy)
@@ -258,9 +263,9 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
                         if (repo.boosterCount(b) <= 0) { buyBooster = b; overlay = Overlay.BUY; return@BoosterButton }
                         when (b) {
                             Booster.HAMMER -> hammerMode = !hammerMode
-                            Booster.MAGNET -> if (engine.magnet()) repo.addBooster(b, -1) else toast = "No marbles to pull yet"
-                            Booster.SLOTS -> { engine.boosterSlots(); repo.addBooster(b, -1) }
-                            Booster.SHUFFLE -> if (engine.boosterShuffle()) repo.addBooster(b, -1) else toast = "Nothing to shuffle"
+                            Booster.MAGNET -> if (engine.magnet()) { repo.addBooster(b, -1); Analytics.boosterUsed("magnet", spec.number) } else toast = "No marbles to pull yet"
+                            Booster.SLOTS -> { engine.boosterSlots(); repo.addBooster(b, -1); Analytics.boosterUsed("slots", spec.number) }
+                            Booster.SHUFFLE -> if (engine.boosterShuffle()) { repo.addBooster(b, -1); Analytics.boosterUsed("shuffle", spec.number) } else toast = "Nothing to shuffle"
                         }
                     }
                 }
@@ -299,13 +304,13 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
         PopupHost(visible = overlay == Overlay.PAUSE, onDismiss = { overlay = Overlay.NONE }) {
             PauseContent(
                 onResume = { overlay = Overlay.NONE },
-                onRestart = { nav.replace(screen.copy(nonce = screen.nonce + 1)) },
+                onRestart = { Analytics.levelRetry(spec.number, "pause"); nav.replace(screen.copy(nonce = screen.nonce + 1)) },
                 onHome = { nav.home() },
             )
         }
         PopupHost(visible = overlay == Overlay.WIN) {
             WinContent(spec.number, winStars, winCoins, screen.daily, engine.maxCombo,
-                onCollect = { mult -> repo.addCoins(winCoins * mult) },
+                onCollect = { mult -> repo.addCoins(winCoins * mult); Analytics.earn(if (mult > 1) "level_win_bonus" else "level_win", winCoins * mult) },
                 onNext = {
                     if (screen.daily) nav.home()
                     else nav.replace(Screen.Game(minOf(spec.number + 1, LevelGenerator.MAX_LEVEL)))
@@ -316,17 +321,18 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
             FailContent(engine.failReason, repo.coins.intValue,
                 onContinue = {
                     if (repo.spend(CONTINUE_PRICE)) {
+                        Analytics.levelContinue(spec.number, CONTINUE_PRICE)
                         engine.continueGame(); resultHandled = false; overlay = Overlay.NONE
                     }
                 },
-                onRetry = { nav.replace(screen.copy(nonce = screen.nonce + 1)) },
+                onRetry = { Analytics.levelRetry(spec.number, "fail"); nav.replace(screen.copy(nonce = screen.nonce + 1)) },
                 onHome = { nav.home() })
         }
         val buyShown = rememberLatest(buyBooster)
         PopupHost(visible = overlay == Overlay.BUY, onDismiss = { overlay = Overlay.NONE }) {
             buyShown?.let { b ->
                 BuyBoosterContent(b, repo.coins.intValue,
-                    onBuy = { if (repo.spend(b.price)) { repo.addBooster(b, 1); sound.play(Sfx.COIN); overlay = Overlay.NONE } },
+                    onBuy = { if (repo.spend(b.price)) { repo.addBooster(b, 1); Analytics.spend("booster_${b.name.lowercase()}", b.price); sound.play(Sfx.COIN); overlay = Overlay.NONE } },
                     onClose = { overlay = Overlay.NONE })
             }
         }

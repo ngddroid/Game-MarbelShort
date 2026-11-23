@@ -32,7 +32,7 @@ object Catalog {
 
 /** All persistent player data, exposed as Compose state. */
 class GameRepository(context: Context) {
-    private val prefs = context.getSharedPreferences("marble_pop", Context.MODE_PRIVATE)
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     val onboardingDone = mutableStateOf(prefs.getBoolean("onboarding", false))
     val level = mutableIntStateOf(prefs.getInt("level", 1))
@@ -49,6 +49,12 @@ class GameRepository(context: Context) {
     val hapticsOn = mutableStateOf(prefs.getBoolean("haptics", true))
     val playerName = mutableStateOf(prefs.getString("name", "Marble Master")!!)
     val avatar = mutableIntStateOf(prefs.getInt("avatar", 0))
+
+    // notifications & privacy (kept across "Reset Progress")
+    val pushOn = mutableStateOf(prefs.getBoolean(KEY_PUSH, true))
+    val shareData = mutableStateOf(prefs.getBoolean(KEY_SHARE_DATA, true))
+    /** Whether we already showed the Android 13+ notification permission prompt once. */
+    val notifPermissionAsked = mutableStateOf(prefs.getBoolean("notif_asked", false))
 
     private val starChars: CharArray = (prefs.getString("stars", null) ?: "").padEnd(LevelGenerator.MAX_LEVEL + 1, '0').toCharArray()
     val starsVersion = mutableIntStateOf(0)
@@ -85,6 +91,7 @@ class GameRepository(context: Context) {
         if (n == level.intValue && n < LevelGenerator.MAX_LEVEL) {
             level.intValue = n + 1
             prefs.edit().putInt("level", n + 1).apply()
+            Analytics.progress(n + 1)
         }
     }
 
@@ -138,6 +145,7 @@ class GameRepository(context: Context) {
     fun buySkin(i: Int): Boolean {
         if (i in ownedSkins.value) return true
         if (!spend(Catalog.skins[i].price)) return false
+        Analytics.spend("skin_$i", Catalog.skins[i].price)
         ownedSkins.value = ownedSkins.value + i
         prefs.edit().putString("owned_skins", encodeSet(ownedSkins.value)).apply()
         return true
@@ -146,6 +154,7 @@ class GameRepository(context: Context) {
     fun buyTheme(i: Int): Boolean {
         if (i in ownedThemes.value) return true
         if (!spend(Catalog.themes[i].price)) return false
+        Analytics.spend("theme_$i", Catalog.themes[i].price)
         ownedThemes.value = ownedThemes.value + i
         prefs.edit().putString("owned_themes", encodeSet(ownedThemes.value)).apply()
         return true
@@ -159,23 +168,28 @@ class GameRepository(context: Context) {
     fun setHaptics(on: Boolean) { hapticsOn.value = on; prefs.edit().putBoolean("haptics", on).apply() }
     fun setName(n: String) { playerName.value = n; prefs.edit().putString("name", n).apply() }
     fun setAvatar(a: Int) { avatar.intValue = a; prefs.edit().putInt("avatar", a).apply() }
+    fun setPushOn(on: Boolean) { pushOn.value = on; prefs.edit().putBoolean(KEY_PUSH, on).apply() }
+    fun setShareData(on: Boolean) { shareData.value = on; prefs.edit().putBoolean(KEY_SHARE_DATA, on).apply() }
+    fun markNotifPermissionAsked() { notifPermissionAsked.value = true; prefs.edit().putBoolean("notif_asked", true).apply() }
 
     fun claimAchievement(id: Int, reward: Int) {
         if (id in claimedAchievements.value) return
         claimedAchievements.value = claimedAchievements.value + id
         prefs.edit().putString("ach", encodeSet(claimedAchievements.value)).apply()
         addCoins(reward)
+        Analytics.reward("achievement_$id", reward)
     }
 
     fun openChest(index: Int) {
         openedChests.value = openedChests.value + index
         prefs.edit().putString("chests", encodeSet(openedChests.value)).apply()
         addStat(Stat.CHESTS, 1)
+        Analytics.reward("chest", index)
     }
 
     // ---- daily
     val canSpin: Boolean get() = lastSpinDay.value != today
-    fun markSpin() { lastSpinDay.value = today; prefs.edit().putLong("spin_day", today).apply(); addStat(Stat.SPINS, 1) }
+    fun markSpin() { lastSpinDay.value = today; prefs.edit().putLong("spin_day", today).apply(); addStat(Stat.SPINS, 1); Analytics.reward("free_spin") }
 
     /** Streak index (0..6) of the next login reward, resetting when a day was missed. */
     val loginIndex: Int get() {
@@ -192,6 +206,7 @@ class GameRepository(context: Context) {
         prefs.edit().putInt("login_streak", loginStreak.intValue).putLong("login_day", today).apply()
         addCoins(reward)
         if (idx == 6) Booster.entries.forEach { addBooster(it, 1) }
+        Analytics.reward("daily_login_day_${idx + 1}", reward)
         return reward
     }
 
@@ -205,11 +220,15 @@ class GameRepository(context: Context) {
         freeGiftAt.value = now + FREE_GIFT_COOLDOWN
         prefs.edit().putLong("free_gift_at", freeGiftAt.value).apply()
         addCoins(100)
+        Analytics.reward("free_gift", 100)
         return true
     }
 
     fun resetProgress() {
-        prefs.edit().clear().putBoolean("onboarding", true).apply()
+        prefs.edit().clear().putBoolean("onboarding", true)
+            .putBoolean(KEY_PUSH, pushOn.value)
+            .putBoolean(KEY_SHARE_DATA, shareData.value).putBoolean("notif_asked", notifPermissionAsked.value)
+            .apply()
         level.intValue = 1; coins.intValue = 300
         Booster.entries.forEach { boosters[it.ordinal] = 2 }
         java.util.Arrays.fill(starChars, '0'); starsVersion.intValue++
@@ -221,6 +240,11 @@ class GameRepository(context: Context) {
     }
 
     companion object {
+        const val PREFS_NAME = "marble_pop"
+        const val KEY_PUSH = "push_on"
+        const val KEY_SHARE_DATA = "share_data"
+
+        fun prefs(context: Context) = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val LOGIN_REWARDS = intArrayOf(50, 75, 100, 125, 150, 200, 400)
         const val FREE_GIFT_COOLDOWN = 4 * 60 * 60 * 1000L
     }

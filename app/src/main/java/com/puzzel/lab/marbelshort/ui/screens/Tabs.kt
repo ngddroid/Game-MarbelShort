@@ -125,6 +125,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
+import com.puzzel.lab.marbelshort.core.Analytics
 
 private val WhiteBody = TextStyle(fontFamily = Fredoka, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, color = Color.White, lineHeight = 18.sp)
 
@@ -369,6 +370,7 @@ fun DailyTab(nav: Nav) {
                     enabled = !spinning && (free || repo.coins.intValue >= 100),
                 ) {
                     if (!free && !repo.spend(100)) return@GameButton
+                    if (!free) Analytics.spend("spin", 100)
                     if (free) repo.markSpin() else repo.addStat(Stat.SPINS, 1)
                     spinning = true
                     val target = Random.nextInt(wheelPrizes.size)

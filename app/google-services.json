@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "644186796473",
+    "project_id": "marble-pop-factory",
+    "storage_bucket": "marble-pop-factory.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644186796473:android:fc8100874579e53bfd0668",
+        "android_client_info": {
+          "package_name": "com.puzzel.lab.marbelshort"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYBV8WxwdNgNm7aomDlxbiVF5Pxy0XNRQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

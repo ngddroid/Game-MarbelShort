@@ -4,4 +4,5 @@
     <color name="brand_dark">#2B1A5E</color>
     <color name="white">#FFFFFFFF</color>
     <color name="black">#FF000000</color>
+    <color name="notification_accent">#FF4C97</color>
 </resources>

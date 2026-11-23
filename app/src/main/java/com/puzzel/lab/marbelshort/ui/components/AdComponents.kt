@@ -46,6 +46,7 @@ import com.puzzel.lab.marbelshort.core.Sfx
 import com.puzzel.lab.marbelshort.ui.theme.Fredoka
 import com.puzzel.lab.marbelshort.ui.theme.GameColors
 import kotlinx.coroutines.delay
+import com.puzzel.lab.marbelshort.core.Analytics
 
 /**
  * "Unlock with an ad" dialog used for locked levels, marble skins and themes.
@@ -74,7 +75,7 @@ fun WatchAdDialog(
             Spacer(Modifier.height(16.dp))
             if (ads.isAvailable) {
                 GameButton("Watch Ad", Modifier.fillMaxWidth().idleBounce(amount = 0.04f), color = BtnColor.Green, icon = Ico.PLAY, shine = true) {
-                    ads.show(placement) { rewarded -> if (rewarded) onUnlocked() }
+                    ads.show(placement) { rewarded -> Analytics.rewardedAd(placement, rewarded); if (rewarded) onUnlocked() }
                     onClose()
                 }
             }

@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.drawscope.translate
@@ -28,19 +29,35 @@ fun nodeX(n: Int): Float = sin(n * 0.85f) * 0.2f
 /** Which side the scenery goes on (opposite the node): -1 left, +1 right. */
 fun scenerySide(n: Int): Int = if (nodeX(n) > 0f) -1 else 1
 
-/** Glass-tube road from node [n] up to node n+1. Finished stretches are filled with gold. */
+/**
+ * Glass-tube road around node [n]: the stretch coming up from node n-1 and the stretch going on to n+1.
+ * Finished stretches are filled with gold.
+ *
+ * Everything is clipped to this item's own bounds. A map item can be raised with zIndex (the current
+ * node, a claimable chest), and an unclipped road would then draw over the neighbouring node's disc,
+ * number and stars. Each stretch is drawn by both items it passes through, with the same geometry, so the
+ * halves meet exactly at the item edge (dashes included).
+ */
 fun DrawScope.drawRoad(n: Int, current: Int) {
-    if (n >= LevelGenerator.MAX_LEVEL) return
+    val h = size.height
+    clipRect(0f, 0f, size.width, h) {
+        if (n > 1) drawRoadSegment(n - 1, baseY = h / 2 + h, done = n - 1 < current)
+        if (n < LevelGenerator.MAX_LEVEL) drawRoadSegment(n, baseY = h / 2, done = n < current)
+    }
+}
+
+/** One stretch of road from node [from] (centred at [baseY]) up to node from+1, one item height above. */
+private fun DrawScope.drawRoadSegment(from: Int, baseY: Float, done: Boolean) {
     val w = size.width
     val h = size.height
-    val x0 = w / 2 + nodeX(n) * w
-    val x1 = w / 2 + nodeX(n + 1) * w
-    val y0 = h / 2
+    val x0 = w / 2 + nodeX(from) * w
+    val x1 = w / 2 + nodeX(from + 1) * w
+    val y0 = baseY
     val y1 = y0 - h
     val path = Path().apply { moveTo(x0, y0); cubicTo(x0, y0 - h * 0.5f, x1, y1 + h * 0.5f, x1, y1) }
     drawPath(path, Color(0x33140A3C), style = Stroke(30.dp.toPx(), cap = StrokeCap.Round))
     drawPath(path, Color.White.copy(alpha = 0.26f), style = Stroke(25.dp.toPx(), cap = StrokeCap.Round))
-    if (n < current) {
+    if (done) {
         drawPath(path, Color(0xFFE59A00), style = Stroke(15.dp.toPx(), cap = StrokeCap.Round))
         drawPath(path, Color(0xFFFFCB3D), style = Stroke(11.dp.toPx(), cap = StrokeCap.Round))
         drawPath(path, Color(0xFFFFF3B8), style = Stroke(3.dp.toPx(), cap = StrokeCap.Round,
