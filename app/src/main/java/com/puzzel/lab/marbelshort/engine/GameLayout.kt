@@ -13,9 +13,29 @@ import kotlin.math.sin
 class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: LevelSpec) {
     val worldW = 720f
     val cx = worldW / 2f
-    /** Marble radius on the belt and in the cups (the belt can hold 48+ marbles, so this stays small). */
+    /** Base marble radius for the cups (cup marbles are drawn at 0.9 of it). */
     val marbleR = 12f
     private val maxHopperR = 19f
+
+    /** Belt radius that keeps the island (gauge) inside the track the same size for any belt marble radius. */
+    private fun beltRFor(r: Float) = 22f + r
+
+    /**
+     * Largest belt marble radius for which [cap] marbles sit side by side on the belt without overlapping
+     * (iterated because a bigger marble needs a taller belt, which is slightly longer).
+     */
+    private fun beltFitR(cap: Int): Float {
+        var r = maxHopperR
+        repeat(3) {
+            val br = beltRFor(r)
+            val len = 2f * ((BELT_RIGHT - BELT_LEFT) - 2f * br) + 2f * PI.toFloat() * br
+            r = min(maxHopperR, len / cap.coerceAtLeast(1) * 0.49f)
+        }
+        return r
+    }
+    private val beltFit = beltFitR(spec.capacity)
+    /** Belt centre line to the top of the tray: clears the lower half of the belt housing. */
+    private fun trayGap(r: Float) = beltRFor(r) + r + 6f
 
     // ---- tray
     val trayCols = spec.tray.size
@@ -33,6 +53,11 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val gridMaxH = spec.height
     val mask: BooleanArray = spec.mask
     val boardPad = 20f
+    /**
+     * Room above the top row: the board frame drawn by the renderer reaches [BOARD_FRAME] above the
+     * grid (14 padding + 10 rim), plus a gap so it never touches the booster bar.
+     */
+    val boardPadTop = BOARD_FRAME + 10f
     val cell: Float
     val gridTop: Float
     val gridBottom: Float
@@ -44,10 +69,11 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val tankTop = topInset
 
     init {
-        val belowFunnel = 46f + maxHopperR + marbleR + 6f + 34f + 52f
+        val estBeltR = beltFit // the real belt marble can only be this size or smaller
+        val belowFunnel = 46f + maxHopperR + estBeltR + 6f + beltRFor(estBeltR) + trayGap(estBeltR)
         val minFunnel = 110f; val maxFunnel = 170f
         val rowsMin = 3.2f; val rowsMax = 4.3f
-        val avail = worldH - bottomInset - topInset - boardPad * 2 - belowFunnel
+        val avail = worldH - bottomInset - topInset - boardPadTop - boardPad - belowFunnel
         var c = min((worldW - 90f) / gridW, 128f)
         c = min(c, (avail - minFunnel - rowsMin * rowH) / gridH)
         var left = avail - gridH * c - minFunnel - rowsMin * rowH
@@ -55,7 +81,7 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
         val funnelExtra = min(left.coerceAtLeast(0f), maxFunnel - minFunnel); left -= funnelExtra
         cell = c
         funnelH = minFunnel + funnelExtra
-        gridTop = topInset + boardPad + left.coerceAtLeast(0f) * 0.55f
+        gridTop = topInset + boardPadTop + left.coerceAtLeast(0f) * 0.55f
         gridBottom = gridTop + gridH * c
     }
 
@@ -64,7 +90,7 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val gridRight = cx + cell * gridW / 2f
 
     // ---- hopper & spout
-    /** Bigger radius for marbles that burst out of a block (path, hopper, spout); they shrink onto the belt. */
+    /** Bigger radius for marbles that burst out of a block (path, hopper, spout); belt marbles keep this size when the belt has room. */
     val hopperR = (cell * 0.16f).coerceIn(14f, maxHopperR)
     val spoutTop = gridBottom + funnelH
     val spoutHalf = hopperR * 1.3f
@@ -72,12 +98,14 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val gateFloor = gateY + hopperR
 
     // ---- belt
-    val beltR = 34f
-    val beltLeft = 76f
-    val beltRight = 644f
-    val topRunY = gateFloor + marbleR + 6f
+    /** Radius of marbles on the belt: the same size as the funnel marbles, unless the belt is too crowded for that. */
+    val beltMarbleR = min(hopperR, beltFit)
+    val beltR = beltRFor(beltMarbleR)
+    val beltLeft = BELT_LEFT
+    val beltRight = BELT_RIGHT
+    val topRunY = gateFloor + beltMarbleR + 6f
     val beltCy = topRunY + beltR
-    val trayTop: Float = beltCy + 52f
+    val trayTop: Float = beltCy + trayGap(beltMarbleR)
     val straight = (beltRight - beltLeft) - 2 * beltR
     val xl = cx - straight / 2f
     val xr = cx + straight / 2f
@@ -119,5 +147,12 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
             }
             else -> { out[0] = xl + (s - half - 2 * arc - straight); out[1] = topRunY }
         }
+    }
+
+    companion object {
+        /** How far the board frame (padding + rim) reaches outside the grid; see GameRenderer.drawBoard. */
+        const val BOARD_FRAME = 24f
+        private const val BELT_LEFT = 76f
+        private const val BELT_RIGHT = 644f
     }
 }

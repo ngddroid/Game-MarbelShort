@@ -14,6 +14,7 @@ import android.graphics.RectF
 import android.graphics.Shader
 import com.puzzel.lab.marbelshort.engine.BlockVisual
 import com.puzzel.lab.marbelshort.engine.GameEngine
+import com.puzzel.lab.marbelshort.engine.GameLayout
 import com.puzzel.lab.marbelshort.engine.MarbleState
 import com.puzzel.lab.marbelshort.engine.Particles
 import com.puzzel.lab.marbelshort.level.BlockKind
@@ -64,12 +65,12 @@ class GameRenderer(
     private val trackBottom = Col.darken(Col.mix(0xFF16113E.toInt(), frameDark, 0.1f), 0.05f)
 
     private val pad = 14f
-    private val rimW = 10f
+    private val rimW = GameLayout.BOARD_FRAME - pad
     private val boardTop = l.gridTop - pad
     private val boardLayerTop = boardTop - rimW - 8f
     private val boardLayerBottom = l.gateFloor + 26f
     private val baseTop = l.dishTop - 16f
-    private val islandR = l.beltR - l.marbleR - 7f
+    private val islandR = l.beltR - l.beltMarbleR - 7f
     private val hubR = islandR * 0.95f
     private val gx0 = l.xl + islandR * 1.15f
     private val gx1 = l.xr - islandR * 1.15f
@@ -115,7 +116,7 @@ class GameRenderer(
         }
         sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.marbleR)
         sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.hopperR)
-        sprites.socket(l.marbleR * 1.02f)
+        sprites.socket(l.beltMarbleR * 1.02f)
         sprites.hub(hubR, frame)
         backdrop = layer(0f, l.worldH) { drawBackdrop(it) }
         board = layer(boardLayerTop, boardLayerBottom) { drawBoard(it) }
@@ -391,7 +392,7 @@ class GameRenderer(
         p.maskFilter = null; p.style = Paint.Style.FILL
         c.restore()
         // ---- belt housing
-        val r = l.marbleR
+        val r = l.beltMarbleR
         val hR = l.beltR + r + 13f
         val tR = l.beltR + r + 6f
         p.color = Col.alpha(frameDark, 90); p.maskFilter = blurred(7f)
@@ -510,16 +511,16 @@ class GameRenderer(
         c.restore()
     }
 
-    /** Radius of belt marbles: normal size, shrunk a little when extra slots make the belt very crowded. */
-    private var beltMarbleR = l.marbleR
+    /** Radius of belt marbles: the funnel size, shrunk only when extra slots make the belt too crowded for it. */
+    private var beltMarbleR = l.beltMarbleR
 
     private fun drawBelt(c: Canvas) {
         val cap = engine.capacity
         val spacing = if (cap > 1) engine.slotS(1) - engine.slotS(0) else l.beltLength
-        beltMarbleR = minOf(l.marbleR, spacing * 0.47f)
+        beltMarbleR = minOf(l.beltMarbleR, spacing * 0.49f)
         val r = beltMarbleR
         val sr = r * 1.02f
-        val sock = sprites.socket(l.marbleR * 1.02f)
+        val sock = sprites.socket(l.beltMarbleR * 1.02f)
         for (i in 0 until cap) {
             l.beltPoint(engine.slotS(i), tmp)
             dst.set(tmp[0] - sr, tmp[1] - sr, tmp[0] + sr, tmp[1] + sr)
@@ -718,6 +719,8 @@ class GameRenderer(
             val r = when (m.state) {
                 MarbleState.PATH, MarbleState.PHYSICS -> l.hopperR
                 MarbleState.BOARDING -> { val k = m.t.coerceIn(0f, 1f); l.hopperR + (beltMarbleR - l.hopperR) * k * (2f - k) }
+                // shrink from belt size to cup size on the way into the cup
+                MarbleState.DROPPING -> { val k = m.t.coerceIn(0f, 1f); beltMarbleR + (l.marbleR * 0.9f - beltMarbleR) * k }
                 else -> l.marbleR
             }
             marbleAt(c, m.x, m.y, m.color, r = r)

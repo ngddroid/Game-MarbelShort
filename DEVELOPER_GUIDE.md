@@ -262,7 +262,7 @@ As soon as balls are waiting and a slot is free, the belt goes back to normal sp
 Notes (checked 2026-11-21):
 - **Not used up when they do nothing.** A refused hammer (full funnel → "WAIT!"), a magnet with nothing to pull, or a shuffle with fewer than 2 cups doesn't consume the booster. Every use caps the level at 2 stars.
 - **Belt label:** the renderer rebuilds the "count / capacity" label when *either* number changes. It used to wait for the count, so right after +6 Slots the old capacity stayed on screen. `magnet()` updates `beltCount` straight away.
-- **Crowded belt:** the belt has a fixed length, and boosters or Continue can push capacity past about 48. Belt marbles and sockets then shrink to `0.47 · spacing` so they never overlap, and the rivets between sockets hide.
+- **Crowded belt:** the belt has a fixed width. When boosters or Continue add slots, belt marbles shrink to `0.49 · spacing` so they never overlap, and the rivets between sockets hide.
 - **`BoosterTest`** covers each booster:
 
   | Booster | Checked |
@@ -297,7 +297,11 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
   - `marbleShadowed` (each marble is one image with its shadow built in).
   - `block(color, variant, size, skin, open)`, which has separate open and closed versions that cross-fade via `BlockVisual.open`.
   - `cup`, `socket`, `hub`, and `overlay` (cage, chains, crate, ice, key, arrow, bomb, bucket, switch).
-- **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` (`cell * 0.16`, kept between 14 and 19, so the funnel (110–170 units tall) holds about 1–2 blocks of balls) while they travel through the board, the hopper and the pipe. The spout width, gate and hopper physics are sized from it. While boarding they shrink to `marbleR` (12), the belt and cup size; the belt keeps the small size because it can hold 48+ marbles.
+- **Board vs. HUD:** `GameScreen` passes the bottom of the HUD (status bar + 150dp: top row, booster tray and a small gap) as `topInset`. `GameLayout` keeps `boardPadTop` (= `BOARD_FRAME` 24 + 10) above the top row, because the board frame reaches 24 units above the grid. `LayoutFitTest` lays out all 5000 levels on six phone and tablet screens. It checks that the frame stays below the HUD, that the belt clears the funnel, and that at least 3 cup rows are visible. **Run it after changing the HUD, `GameLayout` or the board frame.** (Fixed 2026-11-24: tall boards such as level 111 had their top blocks under the booster tray.)
+- **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` (`cell * 0.16`, kept between 14 and 19, so the funnel (110–170 units tall) holds about 1–2 blocks of balls) while they travel through the board, the hopper and the pipe. The spout width, gate and hopper physics are sized from it. On the belt they keep the same size (`GameLayout.beltMarbleR = min(hopperR, belt fit)`) and sit side by side, like the reference art (2026-11-24).
+  - *Belt fit* is the largest radius at which `capacity` marbles fit on the belt (`0.49 · length / capacity`). Up to about 31 slots that is the full funnel size; on more crowded belts the marbles shrink a little while boarding.
+  - The belt grows with the marble: `beltR = 22 + beltMarbleR`, which keeps the gauge island the same size, and the tray moves down to clear the housing.
+  - Marbles shrink to cup size (`0.9 · marbleR`, where `marbleR` = 12) while they drop into a cup.
 - **Block colours:** blocks and cups use solid, saturated marble colours, as in the reference (palette in `MarbleColors`).
   - Blocked blocks are a solid sealed lid with no marbles shown.
   - Open blocks show their 9 marbles.

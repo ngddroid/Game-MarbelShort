@@ -164,7 +164,8 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
         val wPx = constraints.maxWidth
         val hPx = constraints.maxHeight
         val scale = wPx / 720f
-        val hudPx = statusTop + with(density) { 136.dp.toPx() }
+        // bottom of the HUD: top padding 6 + top row 56 + spacer 8 + booster tray (64 + 2·5) = 144dp, plus a small gap
+        val hudPx = statusTop + with(density) { 150.dp.toPx() }
         val engine = remember(screen, wPx, hPx) {
             val layout = GameLayout(hPx / scale, hudPx / scale, 8f, spec)
             GameEngine(spec, layout, listener)
