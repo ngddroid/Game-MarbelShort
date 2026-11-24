@@ -1,5 +1,5 @@
 #!/bin/zsh
-# usage: lvl.sh <level> <outname> — unlock level in the debug build, open it, screenshot
+# usage: lvl.sh <level> <outname> — unlock level in the debug build, open it, screenshot (skips the "New World!" card)
 ADB=~/Library/Android/sdk/platform-tools/adb; P=com.puzzel.lab.marbelshort; S=${0:h}
 $ADB shell am force-stop $P
 $ADB shell run-as $P cat shared_prefs/marble_pop.xml > $S/prefs_in.xml
@@ -9,7 +9,7 @@ lvl,src,dst=sys.argv[1:4]; s=open(src).read()
 def put(s,tag,name,val):
     pat=r'<%s name="%s" value="[^"]*" />'%(tag,name); new='<%s name="%s" value="%s" />'%(tag,name,val)
     return re.sub(pat,new,s) if re.search(pat,s) else s.replace('</map>','    '+new+'\n</map>')
-s=put(s,'int','level',lvl); s=put(s,'int','skin','0'); s=put(s,'int','theme','-1'); s=put(s,'boolean','onboarding','true')
+s=put(s,'int','level',lvl); s=put(s,'int','skin','0'); s=put(s,'int','theme_seen','99'); s=put(s,'boolean','onboarding','true')
 open(dst,'w').write(s)
 PY
 $ADB push $S/prefs.xml /data/local/tmp/prefs.xml >/dev/null

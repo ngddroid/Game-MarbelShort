@@ -4,7 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import com.puzzel.lab.marbelshort.BuildConfig
 
 /** Where a rewarded ad is shown from — useful for analytics / ad unit mapping later. */
-enum class AdPlacement { UNLOCK_LEVEL, UNLOCK_SKIN, UNLOCK_THEME }
+enum class AdPlacement { UNLOCK_LEVEL, UNLOCK_SKIN }
 
 /**
  * Rewarded-video abstraction. The UI only talks to this interface, so a real SDK

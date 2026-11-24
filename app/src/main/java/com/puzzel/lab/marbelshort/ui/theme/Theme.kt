@@ -93,14 +93,12 @@ data class SkyPalette(
 
 object Skies {
     val Menu = SkyPalette(Color(0xFF5A3BEF), Color(0xFF8A52F5), Color(0xFFE77BD8), Color(0xFFFF9AD5), Color(0xFF6FD3FF), Color(0xFF3B1FA6))
-    val Ocean = SkyPalette(Color(0xFF1F5FD6), Color(0xFF2E9BEA), Color(0xFF5FD9E6), Color(0xFF9AF0FF), Color(0xFF7DFFC8), Color(0xFF15489E))
-    val Space = SkyPalette(Color(0xFF140A3F), Color(0xFF2D1B7A), Color(0xFF6A2EB8), Color(0xFFB57BFF), Color(0xFF5FA8FF), Color(0xFF0D0630))
-    val Sunset = SkyPalette(Color(0xFFFF8A5C), Color(0xFFF2557A), Color(0xFF9C3FB5), Color(0xFFFFD36E), Color(0xFFFF9AD5), Color(0xFF6E2380))
-    val Forest = SkyPalette(Color(0xFF3CC88A), Color(0xFF1FA27A), Color(0xFF137A66), Color(0xFFC8FF8A), Color(0xFF7DF0D0), Color(0xFF0C5A4B))
-
-    private val worlds = listOf(Menu, Ocean, Space, Sunset, Forest)
-    /** Sky for a world/theme index (same order as render.Themes). */
-    fun forWorld(i: Int) = worlds[i.mod(worlds.size)]
+    private val worlds: List<SkyPalette> = com.puzzel.lab.marbelshort.render.Themes.all.map { t ->
+        val k = t.sky
+        SkyPalette(Color(k[0]), Color(k[1]), Color(k[2]), Color(k[3]), Color(k[4]), Color(k[5]))
+    }
+    /** Sky for a world/theme index (same order and colours as render.Themes). */
+    fun forWorld(i: Int) = worlds[i.coerceIn(0, worlds.size - 1)]
 }
 
 /** Motion tokens (see UI_GRAPHICS_PLAN.md §1.4). */

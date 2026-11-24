@@ -142,7 +142,7 @@ fun MainScreen(nav: Nav) {
                     0 -> ShopTab()
                     1 -> DailyTab(nav)
                     2 -> HomeTab(nav) { homeWorld = it }
-                    3 -> CollectionTab()
+                    3 -> CollectionTab(nav)
                     else -> ProfileTab()
                 }
             }
@@ -372,7 +372,7 @@ private fun HomeTab(nav: Nav, onWorld: (Int) -> Unit) {
             SideWidget(Ico.CHEST, "Lv.$nextChest", false, 0.15f) {
                 scope.launch { list.animateScrollToItem((nextChest - 3).coerceAtLeast(0)) }
             }
-            SideWidget(Ico.PALETTE, "Themes", false, 0.5f) { nav.tab = 3 }
+            SideWidget(Ico.PALETTE, "Worlds", false, 0.5f) { nav.collectionPage = 1; nav.tab = 3 }
         }
 
         // play button
@@ -406,6 +406,17 @@ private fun HomeTab(nav: Nav, onWorld: (Int) -> Unit) {
             }
         }
         FreeGiftPopup(giftPopup) { giftPopup = false }
+        // one-time notice for players who bought themes before worlds became level unlocks
+        val refund = repo.themeRefund.intValue
+        PopupHost(visible = refund > 0 && chestPopup < 0 && !giftPopup, onDismiss = { repo.clearThemeRefund() }) {
+            GamePanel("Worlds Update", onClose = { repo.clearThemeRefund() }) {
+                GameIcon(Ico.PALETTE, Modifier.size(84.dp).idleBounce())
+                Spacer(Modifier.height(6.dp))
+                Text("Themes are no longer sold: a new world now unlocks as you beat levels. We gave back the $refund coins you spent on themes.", style = PopupBody)
+                Spacer(Modifier.height(16.dp))
+                GameButton("Thanks!", Modifier.fillMaxWidth(), color = BtnColor.Green, shine = true) { repo.clearThemeRefund() }
+            }
+        }
     }
 }
 
@@ -477,7 +488,7 @@ private fun LevelNode(
     val state = when { n < current -> 0; n == current -> 1; adUnlocked -> 3; else -> 2 }
     val boss = LevelGenerator.isBoss(n)
     val world = LevelGenerator.themeFor(n)
-    val worldStart = (n - 1) % 25 == 0
+    val worldStart = Themes.startingAt(n) >= 0
     val hasChest = n % 10 == 0
     Box(Modifier.fillMaxWidth().height(118.dp).zIndex(if (state == 1 || chestClaimable) 1f else 0f)) {
         Canvas(Modifier.fillMaxSize()) {
@@ -558,12 +569,19 @@ private fun PlayerPin(t: State<Float>, avatar: Int, modifier: Modifier) {
     }
 }
 
+private val WorldColors = listOf(
+    BtnColor.Purple, BtnColor.Blue, BtnColor.Green, BtnColor.Orange, BtnColor.Pink, BtnColor.Purple, BtnColor.Blue,
+    BtnColor.Yellow, BtnColor.Green, BtnColor.Orange, BtnColor.Pink, BtnColor.Blue, BtnColor.Red, BtnColor.Yellow,
+)
+
+/** Chip colour of a world (theme index), shared by the map signs and the Worlds gallery. */
+internal fun worldColor(world: Int): BtnColor = WorldColors[world.coerceIn(0, WorldColors.size - 1)]
+
 @Composable
 private fun WorldSign(n: Int, world: Int, modifier: Modifier) {
-    val color = when (world.mod(5)) { 0 -> BtnColor.Purple; 1 -> BtnColor.Blue; 2 -> BtnColor.Purple; 3 -> BtnColor.Orange; else -> BtnColor.Green }
-    val name = Themes.get(world).name.let { if (it == "Lava") "Sunset" else it }
+    val name = Themes.get(world).name
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Chip("WORLD ${(n - 1) / 25 + 1}", color, fontSize = 13.sp)
+        Chip("WORLD ${world + 1}", worldColor(world), fontSize = 13.sp)
         Spacer(Modifier.height(3.dp))
         OutlinedText(name, fontSize = 20.sp, brush = Grad.Snow, maxLines = 1)
     }

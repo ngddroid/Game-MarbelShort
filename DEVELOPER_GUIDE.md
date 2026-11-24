@@ -43,7 +43,7 @@ app/src/main/java/com/puzzel/lab/marbelshort/
 │  ├─ GameRenderer.kt       draws the playground (baked static layers + cached sprites)
 │  ├─ MachineArt.kt         procedural art: marbles, jelly blocks, jelly-box cups, belt socket, roller hub (+ unused legacy parts)
 │  ├─ Sprites.kt            `Col` colour helpers, `Painter` (icons/overlays/text), `SpriteCache`
-│  └─ Themes.kt             5 colour themes (Candy Lab, Ocean, Space, Lava, Forest) + their sky palettes
+│  └─ Themes.kt             14 worlds (colour themes + sky palettes) and the level each one unlocks at
 └─ ui/
    ├─ MarbleApp.kt          navigation (Screen + Nav), screen transitions, music switching, ad overlay
    ├─ theme/Theme.kt        design tokens: GameColors, Grad (gradients), Skies (sky palettes), Motion, fonts, text styles
@@ -305,7 +305,7 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
 - **Block colours:** blocks and cups use solid, saturated marble colours, as in the reference (palette in `MarbleColors`).
   - Blocked blocks are a solid sealed lid with no marbles shown.
   - Open blocks show their 9 marbles.
-- **Palette:** colours come from the selected `GameTheme` (`Themes.kt`).
+- **Palette:** colours come from the level's `GameTheme` (`Themes.kt`, see "Worlds" below).
   - The belt track is deep indigo, only lightly tinted by the world, so marbles stand out.
   - Cell wells use a neutral slate tint, so pastel blocks never blend into the board in the pink or green worlds.
 - **Art painters:**
@@ -346,12 +346,37 @@ The full visual spec is in **UI_GRAPHICS_PLAN.md** ("Candy Glass Factory": gloss
 
 **Flow:** Splash → Onboarding (first launch only, 4 swipeable pages, no skip button) → Main.
 
+### Worlds (`render/Themes.kt`)
+Themes are **worlds that unlock by progress**, not shop items. `Themes.all` is in unlock order. A level uses the world with the highest `unlockLevel` at or below its number (`Themes.indexForLevel`, also `LevelGenerator.themeFor`). In game, `GameRepository.themeForLevel(n)` caps `n` at the player's highest level, so a daily challenge or an ad-unlocked level far ahead never shows a world the player hasn't reached.
+
+| # | World | From level | Map scenery |
+|---|---|---|---|
+| 1 | Candy Lab | 1 | candy |
+| 2 | Ocean | 40 | ocean |
+| 3 | Forest | 80 | forest |
+| 4 | Sunset | 120 | desert crystals |
+| 5 | Bubblegum Bay | 180 | candy |
+| 6 | Space | 250 | space |
+| 7 | Frosty Peaks | 350 | snow |
+| 8 | Honey Hive | 500 | forest |
+| 9 | Jelly Lagoon | 700 | ocean |
+| 10 | Choco Falls | 1000 | candy |
+| 11 | Neon Arcade | 1400 | space |
+| 12 | Gear Works | 2000 | desert crystals |
+| 13 | Volcano Forge | 2800 | desert crystals |
+| 14 | Royal Galaxy | 3800 | space |
+
+Why these levels: new worlds come every 40 levels at first, so players who just hit the hard levels (31+) get a visible reward often. After that the gaps widen (60, 70, 100, 150, 200, 300, 400, 600, 800, 1000) because few players get far and each world should feel earned. The last world still leaves 1200 levels before level 5000.
+
+- **"New World!" card:** the first time a player opens a level in a world above `theme_seen`, `GameScreen` shows `NewWorldContent` (overlay `WORLD`) before any feature intro, then calls `markThemeSeen`. Daily challenges never show it. On first launch `theme_seen` is set to the player's current world, so existing players aren't shown cards for worlds they already reached.
+- **Players who bought themes before this change:** `migrateBoughtThemes()` runs once. It deletes the old `theme` pick and `owned_themes`, and refunds the old coin price of every owned theme (Ocean 800, Space 1500, Lava/Sunset 1200, Forest 1000, kept in `Catalog.legacyThemePrices`). Themes unlocked with an ad can't be told apart from bought ones, so they are refunded too. The home map then shows a one-time "Worlds Update" popup with the amount.
+
 ### Design tokens (`theme/Theme.kt`)
 | Token | What it holds |
 |---|---|
 | `GameColors` | Flat colours. `Ink` (#2A1463) is the outline colour for almost everything. |
 | `Grad` | Brushes for candy text and panels (`Gold`, `Pink`, `Aqua`, `Mint`, `Snow`, `Coral`, `PanelRim`, `PanelFill`). |
-| `Skies` | `SkyPalette`s: `Menu`, plus one per world via `Skies.forWorld(themeIndex)` (Candy Lab, Ocean, Space, Sunset, Forest). |
+| `Skies` | `SkyPalette`s: `Menu`, plus one per world via `Skies.forWorld(themeIndex)`, built from `GameTheme.sky` so the map and the game share one source. |
 | `Motion` | Durations, easings (`EaseIn` for entering, `EaseOut` for leaving) and springs (`bouncy`, `snappy`, `gentle`). |
 
 ### Components (`components/`)
@@ -383,14 +408,15 @@ The full visual spec is in **UI_GRAPHICS_PLAN.md** ("Candy Glass Factory": gloss
   - A reversed `LazyColumn` of 5000 `LevelNode`s.
   - Each item draws its glass-tube road segment (`drawRoad`; gold when finished) and one world-themed scenery prop (`drawScenery`) on the side away from the node.
   - Nodes are 3D discs (`drawNodeDisc`). Only the current node animates: ping rings and the player pin.
-  - Chests sit every 10 levels and a world sign every 25.
+  - Chests sit every 10 levels. A world sign ("WORLD n" + the world's name) sits on each world's first level.
+  - Scenery props come from the world's `GameTheme.scenery` set: candy, ocean, space, desert crystals, forest or snow.
   - The world shown at the screen centre drives the sky.
   - Tapping a **locked** level opens the Watch-Ad dialog (see section 9).
 - **Tabs** (`Tabs.kt`):
   - `TabHeader` + `TabBody`: a scroll column with faded top and bottom edges, using one offscreen layer.
   - Shop has a free-coin hero, a booster grid, the Mega Bundle and a `RewardToast`.
   - Daily has the `LuckyWheel` (its face is baked into a bitmap once and rotated; chasing bulbs; a gem pointer that flicks), the daily challenge and the 7-day tiles.
-  - Collection has a segmented switch, skin tiles with rarity chips, and theme cards.
+  - Collection has a segmented switch (Marbles / Worlds), skin tiles with rarity chips, and world cards. World cards are read-only: playing, unlocked, or locked with "Reach level N". The map's **Worlds** side button opens that page (`Nav.collectionPage`).
   - Profile has the player card, stat tiles and achievements with progress tubes.
 - **Settings / Legal** (`SettingsScreens.kt`):
   - Settings uses grouped cards with icon tiles, toggles and link rows with chevrons.
@@ -429,7 +455,10 @@ SharedPreferences file **`marble_pop`**. Every value is mirrored into Compose st
 | `level` | highest unlocked level |
 | `stars` | 5001-char string, char *n* = stars ('0'–'3') of level *n* |
 | `coins`, `booster_<NAME>` | currency and booster counts (start: 300 coins, 2 of each booster) |
-| `skin`, `owned_skins`, `theme`, `owned_themes` | selected/owned cosmetics (`theme = -1` = auto: theme changes every 25 levels) |
+| `skin`, `owned_skins` | selected/owned marble skin |
+| `theme_seen` | highest world index whose "New World!" card was shown |
+| `theme_refund` | coins returned for bought themes, waiting for the one-time "Worlds Update" notice |
+| `theme`, `owned_themes` | **legacy**, removed on first launch by `migrateBoughtThemes()` (see "Worlds") |
 | `ad_levels` | levels unlocked early with a rewarded ad |
 | `music`, `sfx`, `haptics`, `name`, `avatar` | settings / profile |
 | `stat_<NAME>`, `ach`, `chests` | stats for achievements, claimed achievements, opened chests |
@@ -438,7 +467,7 @@ SharedPreferences file **`marble_pop`**. Every value is mirrored into Compose st
 `resetProgress()` (Settings → Reset Progress) clears everything except the onboarding flag.
 
 Economy constants live next to their features:
-- `Booster` prices and the `Catalog` of skins and themes are in `GameRepository.kt`.
+- `Booster` prices and the `Catalog` of skins are in `GameRepository.kt`. Themes are not sold; they unlock by level (`Themes.kt`).
 - `CONTINUE_PRICE` is in `GameScreen.kt`.
 - `LOGIN_REWARDS` and `FREE_GIFT_COOLDOWN` are in the repository's companion object.
 - Wheel prizes are in `Tabs.kt`.
@@ -455,10 +484,10 @@ interface RewardedAds {
 }
 ```
 - **Debug builds:** `Ads.rewarded = DebugRewardedAds`. `show()` opens `DebugAdOverlay`, a full-screen "TEST AD" with a 3-second countdown. **Get Reward** grants the reward and ✕ closes without it.
-- **Release builds:** `NoRewardedAds`. `isAvailable = false`, so no "Watch Ad" buttons appear, locked levels stay locked, and skins and themes can only be bought with coins.
+- **Release builds:** `NoRewardedAds`. `isAvailable = false`, so no "Watch Ad" buttons appear, locked levels stay locked, and skins can only be bought with coins.
 - **Where ads are offered today** (`AdPlacement`):
   - `UNLOCK_LEVEL`: tap a locked node on the home road. On reward, the level is added to `ad_levels` and opens.
-  - `UNLOCK_SKIN` / `UNLOCK_THEME`: the **Unlock** button in Collection offers **Watch Ad** or **Buy with coins**. On reward, the item is granted and selected.
+  - `UNLOCK_SKIN`: the **Unlock** button on a marble skin in Collection offers **Watch Ad** or **Buy with coins**. On reward, the skin is granted and selected. (Worlds can't be unlocked with ads or coins.)
 
 **To integrate a real SDK later** (e.g. AdMob):
 1. Add the SDK dependency and the app ID to the manifest. Initialise it in `MainActivity.onCreate`.
@@ -493,7 +522,7 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 
 - **Jump to any level on a connected device** (debug build only; uses `run-as` to edit the save file):
   ```bash
-  tools/jump_level.sh 120 shot_name     # sets level=120, default skin/theme, opens the game, saves shot_name.png next to the script
+  tools/jump_level.sh 120 shot_name     # sets level=120, default skin, skips the "New World!" card, opens the game, saves shot_name.png next to the script
   ```
 - **Frame timing:** `adb shell dumpsys gfxinfo com.puzzel.lab.marbelshort` (call `… reset` first). Read `Number Frame deadline missed` and the gpu percentiles; see the smoothness rules in section 7.
 - **Inspect the save file:** `adb shell run-as com.puzzel.lab.marbelshort cat shared_prefs/marble_pop.xml`
@@ -512,7 +541,7 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 
 **Tune difficulty**: change `handmade` (levels 1–30) or `recipeFor()` (block count, colours, cup window, belt margin, feature chances). The tests guarantee solvability, so run them after every change.
 
-**Add a theme**: append a `GameTheme` to `Themes.all` and a `ThemeInfo` (name, price) to `Catalog.themes`. The board, dish and backdrop colours are derived from the theme fields.
+**Add a world (theme)**: insert a `GameTheme` into `Themes.all` at its place in the unlock order, with its `unlockLevel` (higher than the one before it) and a `scenery` set. Fill every colour field and a 6-colour `sky`; the board frame, glass, belt tint and backdrop are derived from `wall`/`wallDark`/`wallLight` and `sky`. Add a chip colour to `WorldColors` in `MainScreen.kt`. `ThemeScheduleTest` checks the order and the palette.
 
 **Add a marble skin**: add a branch in `MachineArt.marbleBody` (and `marbleGloss` if lighting differs) and a `Skin` to `Catalog.skins`. The index must match.
 
@@ -524,5 +553,4 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 
 - **Unused art:** `MachineArt.crate/gear/cradle/chromeRect/rivet` are from the earlier factory-machine design and are unused; delete them if not needed.
 - **Visual check:** with the current playground, only levels 1, 3, 6, 14, 15, 23 and 24 were checked by eye on a device (plus the ad flows). The other special blocks and themes are covered only by the rule and solvability tests. The fail popup and the confetti were not seen on a device after the UI redesign.
-- **World names:** the 4th theme is still called `Lava` in `Themes.kt` / `Catalog`; the UI shows it as "Sunset". Rename it in data if you want the names to match.
 - **Release:** release signing is not configured, ads are not integrated (see section 9), and the legal pages contain a placeholder e-mail.

@@ -81,6 +81,8 @@ sealed interface Screen {
 class Nav {
     var screen by mutableStateOf<Screen>(Screen.StudioIntro)
     var tab by mutableIntStateOf(2)
+    /** Collection tab page: 0 marbles, 1 worlds. */
+    var collectionPage by mutableIntStateOf(0)
     /** Direction of the last navigation, used to pick push vs. pop animations. */
     var forward = true
         private set

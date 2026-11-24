@@ -608,15 +608,14 @@ private enum class Rarity(val label: String, val color: BtnColor, val glow: Colo
 private fun rarityOf(price: Int) = when { price == 0 -> Rarity.COMMON; price <= 900 -> Rarity.RARE; price <= 1500 -> Rarity.EPIC; else -> Rarity.LEGENDARY }
 
 @Composable
-fun CollectionTab() {
+fun CollectionTab(nav: Nav) {
     val repo = LocalRepo.current
     val sound = LocalSound.current
-    var page by remember { mutableIntStateOf(0) }
+    val page = nav.collectionPage
     var lockedSkin by remember { mutableIntStateOf(-1) }
-    var lockedTheme by remember { mutableIntStateOf(-1) }
     Column(Modifier.fillMaxSize()) {
         TabHeader("Collection")
-        SegmentedSwitch(listOf("Marbles", "Themes"), page, Modifier.padding(horizontal = 14.dp).fillMaxWidth()) { page = it }
+        SegmentedSwitch(listOf("Marbles", "Worlds"), page, Modifier.padding(horizontal = 14.dp).fillMaxWidth()) { nav.collectionPage = it }
         Spacer(Modifier.height(10.dp))
         AnimatedContent(
             page,
@@ -643,18 +642,13 @@ fun CollectionTab() {
                         }
                     }
                 } else {
-                    ThemeCard("Auto Rotate", "A new world every 25 levels", true, repo.theme.intValue == -1, 0, onAction = { repo.selectTheme(-1) }) {
-                        Row(Modifier.fillMaxSize().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            for (t in Themes.all) Box(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(10.dp)).background(Brush.verticalGradient(listOf(Color(t.bgTop), Color(t.bgBottom)))))
-                        }
-                    }
-                    Catalog.themes.forEachIndexed { i, info ->
-                        val owned = i in repo.ownedThemes.value
-                        val name = if (info.name == "Lava") "Sunset" else info.name
-                        ThemeCard(name, "Playground theme", owned, repo.theme.intValue == i, info.price, onAction = { if (owned) repo.selectTheme(i) else lockedTheme = i }) {
-                            ThemePreview(Themes.get(i))
-                        }
-                    }
+                    Text(
+                        "A new world unlocks as you beat levels. Each world is used until you reach the next one.",
+                        style = CardBodyStyle.copy(fontSize = 13.sp, color = Color.White, textAlign = TextAlign.Center),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                    )
+                    val current = repo.unlockedTheme
+                    Themes.all.forEachIndexed { i, t -> WorldCard(i, t, current, repo.level.intValue) }
                 }
             }
         }
@@ -670,19 +664,6 @@ fun CollectionTab() {
             coinPrice = Catalog.skins[i].price, coins = repo.coins.intValue,
             onBuy = { if (repo.buySkin(i)) { repo.selectSkin(i); sound?.play(Sfx.REWARD) }; lockedSkin = -1 },
         ) { SkinPreview(i) }
-    }
-    val themeShown = rememberLatest(lockedTheme.takeIf { it >= 0 })
-    if (themeShown != null) {
-        val i = themeShown
-        val name = Catalog.themes[i].name.let { if (it == "Lava") "Sunset" else it }
-        WatchAdDialog(
-            visible = lockedTheme >= 0,
-            title = name, message = "Unlock the $name playground theme!", placement = AdPlacement.UNLOCK_THEME,
-            onUnlocked = { repo.grantTheme(i); repo.selectTheme(i) },
-            onClose = { lockedTheme = -1 },
-            coinPrice = Catalog.themes[i].price, coins = repo.coins.intValue,
-            onBuy = { if (repo.buyTheme(i)) { repo.selectTheme(i); sound?.play(Sfx.REWARD) }; lockedTheme = -1 },
-        ) { Box(Modifier.size(150.dp, 110.dp).clip(RoundedCornerShape(16.dp))) { ThemePreview(Themes.get(i)) } }
     }
 }
 
@@ -721,33 +702,53 @@ private fun SkinTile(i: Int, name: String, price: Int, owned: Boolean, selected:
     }
 }
 
+/** One world in the Worlds gallery: unlocked by progress, never bought. */
 @Composable
-private fun ThemeCard(name: String, subtitle: String, owned: Boolean, selected: Boolean, price: Int, onAction: () -> Unit, preview: @Composable () -> Unit) {
+private fun WorldCard(i: Int, t: com.puzzel.lab.marbelshort.render.GameTheme, current: Int, level: Int) {
+    val unlocked = i <= current
+    val playing = i == current
+    val next = Themes.all.getOrNull(i + 1)?.unlockLevel
+    val range = if (next != null) "Levels ${t.unlockLevel}\u2013${next - 1}" else "Levels ${t.unlockLevel}+"
     SectionCard(Modifier.fillMaxWidth(), padding = 10.dp) {
         Box(
             Modifier.fillMaxWidth().height(140.dp).clip(RoundedCornerShape(18.dp))
-                .border(if (selected) 3.5.dp else 0.dp, GameColors.Green, RoundedCornerShape(18.dp)),
+                .border(if (playing) 3.5.dp else 0.dp, GameColors.Green, RoundedCornerShape(18.dp)),
         ) {
-            preview()
-            if (selected) Box(
+            ThemePreview(t)
+            Chip("WORLD ${i + 1}", if (unlocked) worldColor(i) else BtnColor.Gray, Modifier.align(Alignment.TopStart).padding(8.dp), fontSize = 11.sp)
+            if (playing) Box(
                 Modifier.align(Alignment.TopEnd).padding(8.dp).size(30.dp)
                     .background(Brush.verticalGradient(listOf(GameColors.GreenLight, GameColors.Green)), CircleShape).border(2.dp, Color.White, CircleShape),
                 contentAlignment = Alignment.Center,
             ) { GameIcon(Ico.CHECK, Modifier.size(20.dp)) }
-            if (!owned) Chip(rarityOf(price).label, rarityOf(price).color, Modifier.align(Alignment.TopStart).padding(8.dp), fontSize = 11.sp)
+            if (!unlocked) {
+                Box(Modifier.fillMaxSize().background(Color(0x99140A3C)))
+                Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+                    GameIcon(Ico.LOCK, Modifier.size(46.dp))
+                    Spacer(Modifier.height(4.dp))
+                    OutlinedText("Reach level ${t.unlockLevel}", fontSize = 18.sp, maxLines = 1)
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(name, style = CardTitleStyle.copy(fontSize = 20.sp), maxLines = 1)
-                Text(subtitle, style = CardBodyStyle.copy(fontSize = 12.sp), maxLines = 1)
+                Text(t.name, style = CardTitleStyle.copy(fontSize = 20.sp), maxLines = 1)
+                Text(
+                    when {
+                        playing -> "Your world now \u00b7 $range"
+                        unlocked -> "Unlocked \u00b7 $range"
+                        i == current + 1 -> (t.unlockLevel - level).let { if (it == 1) "1 level to go" else "$it levels to go" }
+                        else -> "Unlocks at level ${t.unlockLevel}"
+                    },
+                    style = CardBodyStyle.copy(fontSize = 12.sp), maxLines = 1,
+                )
             }
             Spacer(Modifier.width(8.dp))
-            val w = Modifier.width(126.dp)
             when {
-                selected -> GameButton("Selected", w, color = BtnColor.Gray, height = 44.dp, fontSize = 17.sp, enabled = false) {}
-                owned -> GameButton("Use", w, color = BtnColor.Green, height = 44.dp, fontSize = 18.sp) { onAction() }
-                else -> GameButton("Unlock", w, color = BtnColor.Yellow, height = 44.dp, fontSize = 18.sp, icon = Ico.LOCK) { onAction() }
+                playing -> Chip("PLAYING", BtnColor.Green, fontSize = 13.sp)
+                unlocked -> Chip("UNLOCKED", BtnColor.Blue, fontSize = 13.sp)
+                else -> Chip("LV. ${t.unlockLevel}", BtnColor.Yellow, fontSize = 13.sp)
             }
         }
     }
@@ -764,9 +765,9 @@ private fun SkinPreview(skin: Int) {
 }
 
 @Composable
-private fun ThemePreview(t: com.puzzel.lab.marbelshort.render.GameTheme) {
+internal fun ThemePreview(t: com.puzzel.lab.marbelshort.render.GameTheme) {
     Canvas(Modifier.fillMaxSize()) {
-        drawRect(Brush.verticalGradient(listOf(Color(t.bgTop), Color(t.bgBottom))))
+        drawRect(Brush.verticalGradient(if (t.sky.size == 6) listOf(Color(t.sky[0]), Color(t.sky[1]), Color(t.sky[2])) else listOf(Color(t.bgTop), Color(t.bgBottom))))
         val w = size.width; val h = size.height
         for (k in 0 until 6) drawCircle(Color.White.copy(alpha = 0.12f), h * (0.05f + k % 3 * 0.03f), Offset(w * (0.1f + k * 0.17f), h * (0.15f + (k % 2) * 0.6f)))
         drawRoundRect(Color(t.wallDark), Offset(w * 0.06f, h * 0.08f), Size(w * 0.5f, h * 0.84f), CornerRadius(16f))

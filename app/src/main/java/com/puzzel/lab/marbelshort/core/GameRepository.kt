@@ -6,6 +6,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import com.puzzel.lab.marbelshort.level.Feature
 import com.puzzel.lab.marbelshort.level.LevelGenerator
+import com.puzzel.lab.marbelshort.render.Themes
 import java.time.LocalDate
 
 enum class Booster(val title: String, val price: Int, val description: String) {
@@ -18,17 +19,17 @@ enum class Booster(val title: String, val price: Int, val description: String) {
 enum class Stat { LEVELS_WON, THREE_STARS, MARBLES, CUPS, BLOCKS, MAX_COMBO, BOOSTERS, SPINS, DAILY_WINS, COINS_EARNED, CHESTS, BOSS_WINS }
 
 data class Skin(val name: String, val price: Int)
-data class ThemeInfo(val name: String, val price: Int)
 
 object Catalog {
     val skins = listOf(
         Skin("Glossy", 0), Skin("Glass", 600), Skin("Candy", 900), Skin("Galaxy", 1500),
         Skin("Metal", 1200), Skin("Neon", 1800), Skin("Smiley", 2500),
     )
-    val themes = listOf(
-        ThemeInfo("Candy Lab", 0), ThemeInfo("Ocean", 800), ThemeInfo("Space", 1500),
-        ThemeInfo("Lava", 1200), ThemeInfo("Forest", 1000),
-    )
+    /**
+     * Coin prices of the themes that used to be sold, by their old index (Ocean, Space, Lava, Forest).
+     * Only used to refund players who bought them before themes became level unlocks.
+     */
+    val legacyThemePrices = mapOf(1 to 800, 2 to 1500, 3 to 1200, 4 to 1000)
 }
 
 /** All persistent player data, exposed as Compose state. */
@@ -43,8 +44,10 @@ class GameRepository(context: Context) {
     }
     val skin = mutableIntStateOf(prefs.getInt("skin", 0))
     val ownedSkins = mutableStateOf(decodeSet(prefs.getString("owned_skins", "0")!!))
-    val theme = mutableIntStateOf(prefs.getInt("theme", -1)) // -1 = auto rotate
-    val ownedThemes = mutableStateOf(decodeSet(prefs.getString("owned_themes", "0")!!))
+    /** Highest world (theme index) whose "new world" card the player has seen. */
+    val seenTheme = mutableIntStateOf(prefs.getInt("theme_seen", Themes.indexForLevel(prefs.getInt("level", 1))))
+    /** Coins returned for themes bought before themes became level unlocks; shown once on the map. */
+    val themeRefund = mutableIntStateOf(prefs.getInt("theme_refund", 0))
     val musicOn = mutableStateOf(prefs.getBoolean("music", true))
     val sfxOn = mutableStateOf(prefs.getBoolean("sfx", true))
     val hapticsOn = mutableStateOf(prefs.getBoolean("haptics", true))
@@ -79,6 +82,30 @@ class GameRepository(context: Context) {
         seenFeatures.value = seenFeatures.value + fs.map { it.ordinal }
         prefs.edit().putString("seen_features", encodeSet(seenFeatures.value)).apply()
     }
+
+    init { migrateBoughtThemes() }
+
+    /**
+     * Themes used to be bought (or unlocked with an ad) and picked by hand. Now each world unlocks at a
+     * level, so the old `theme` pick and `owned_themes` set are dropped once, and the coins paid for
+     * them are given back. Ad-granted themes can't be told apart from bought ones, so they count too.
+     */
+    private fun migrateBoughtThemes() {
+        // pin the starting point so worlds already reached never show the "new world" card
+        if (!prefs.contains("theme_seen")) prefs.edit().putInt("theme_seen", seenTheme.intValue).apply()
+        if (!prefs.contains("owned_themes") && !prefs.contains("theme")) return
+        val owned = decodeSet(prefs.getString("owned_themes", "") ?: "")
+        val refund = owned.sumOf { Catalog.legacyThemePrices[it] ?: 0 }
+        val e = prefs.edit().remove("owned_themes").remove("theme")
+        if (refund > 0) {
+            coins.intValue += refund
+            themeRefund.intValue += refund
+            e.putInt("coins", coins.intValue).putInt("theme_refund", themeRefund.intValue)
+        }
+        e.apply()
+    }
+
+    fun clearThemeRefund() { themeRefund.intValue = 0; prefs.edit().remove("theme_refund").apply() }
 
     // daily
     val lastSpinDay = mutableStateOf(prefs.getLong("spin_day", -1))
@@ -123,12 +150,6 @@ class GameRepository(context: Context) {
         prefs.edit().putString("owned_skins", encodeSet(ownedSkins.value)).apply()
     }
 
-    /** Grants a theme without spending coins (rewarded ad). */
-    fun grantTheme(i: Int) {
-        ownedThemes.value = ownedThemes.value + i
-        prefs.edit().putString("owned_themes", encodeSet(ownedThemes.value)).apply()
-    }
-
     fun addCoins(amount: Int) {
         coins.intValue = (coins.intValue + amount).coerceAtLeast(0)
         prefs.edit().putInt("coins", coins.intValue).apply()
@@ -165,18 +186,21 @@ class GameRepository(context: Context) {
         prefs.edit().putString("owned_skins", encodeSet(ownedSkins.value)).apply()
         return true
     }
-    fun selectTheme(i: Int) { theme.intValue = i; prefs.edit().putInt("theme", i).apply() }
-    fun buyTheme(i: Int): Boolean {
-        if (i in ownedThemes.value) return true
-        if (!spend(Catalog.themes[i].price)) return false
-        Analytics.spend("theme_$i", Catalog.themes[i].price)
-        ownedThemes.value = ownedThemes.value + i
-        prefs.edit().putString("owned_themes", encodeSet(ownedThemes.value)).apply()
-        return true
-    }
+    /** Worlds unlock by progress: the world of the highest level the player has reached. */
+    val unlockedTheme: Int get() = Themes.indexForLevel(level.intValue)
+    fun isThemeUnlocked(i: Int) = i <= unlockedTheme
 
-    /** Theme used for a level: the player's pick, or the rotating level theme. */
-    fun themeForLevel(n: Int): Int = theme.intValue.takeIf { it >= 0 } ?: LevelGenerator.themeFor(n)
+    /**
+     * Theme used for level [n]: its own world, but never one the player hasn't reached yet (daily
+     * challenges and ad-unlocked levels can be far ahead), so worlds are only ever revealed by progress.
+     */
+    fun themeForLevel(n: Int): Int = Themes.indexForLevel(minOf(n, level.intValue))
+
+    fun markThemeSeen(i: Int) {
+        if (i <= seenTheme.intValue) return
+        seenTheme.intValue = i
+        prefs.edit().putInt("theme_seen", i).apply()
+    }
 
     fun setMusic(on: Boolean) { musicOn.value = on; prefs.edit().putBoolean("music", on).apply() }
     fun setSfx(on: Boolean) { sfxOn.value = on; prefs.edit().putBoolean("sfx", on).apply() }
@@ -248,7 +272,7 @@ class GameRepository(context: Context) {
         Booster.entries.forEach { boosters[it.ordinal] = 2 }
         java.util.Arrays.fill(starChars, '0'); starsVersion.intValue++
         Stat.entries.forEach { stats[it.ordinal] = 0 }
-        skin.intValue = 0; ownedSkins.value = setOf(0); theme.intValue = -1; ownedThemes.value = setOf(0)
+        skin.intValue = 0; ownedSkins.value = setOf(0); seenTheme.intValue = 0; themeRefund.intValue = 0
         claimedAchievements.value = emptySet(); openedChests.value = emptySet(); adUnlockedLevels.value = emptySet()
         lastSpinDay.value = -1; loginStreak.intValue = 0; lastLoginClaimDay.value = -1; dailyWinDay.value = -1; freeGiftAt.value = 0
         musicOn.value = true; sfxOn.value = true; hapticsOn.value = true

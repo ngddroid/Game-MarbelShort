@@ -17,7 +17,6 @@ import kotlin.math.sqrt
  */
 object LevelGenerator {
     const val MAX_LEVEL = 5000
-    const val THEME_COUNT = 5
     private const val MAX_CAPACITY = 48
     private const val MIN_CAPACITY = 14
     private const val MAX_COLORS = 10
@@ -43,7 +42,8 @@ object LevelGenerator {
     @Synchronized
     fun get(n: Int): LevelSpec = cache.getOrPut(n.coerceIn(1, MAX_LEVEL)) { generate(n.coerceIn(1, MAX_LEVEL)) }
 
-    fun themeFor(n: Int): Int = ((n - 1) / 25) % THEME_COUNT
+    /** World (theme index) of level [n], from the unlock table in render.Themes. */
+    fun themeFor(n: Int): Int = com.puzzel.lab.marbelshort.render.Themes.indexForLevel(n)
 
     fun isBoss(n: Int) = n % 50 == 0
 

@@ -136,7 +136,7 @@ Layout (portrait, scaled from a 720×1600 design grid):
 - `LevelGenerator(seed = levelNumber)` is deterministic, so no level files are stored and all levels are guaranteed identical across devices.
 - **Levels 1–30 are hand-tuned** in code for a smooth tutorial curve.
 - Difficulty curve: colors 3→8, grid size, belt capacity shrinking, special-element density, with a saw-tooth rhythm (easy, easy, medium, hard, relief) and a boss every 50.
-- Container shape is picked from 20+ shape templates. Theme rotates every 25 levels.
+- Container shape is picked from 20+ shape templates. Theme (world) changes at fixed unlock levels: 1, 40, 80, 120, 180, 250, 350, 500, 700, 1000, 1400, 2000, 2800, 3800 (see DEVELOPER_GUIDE "Worlds").
 - `LevelGeneratorTest` generates and solves all 5000 levels in a JVM unit test.
 
 ---

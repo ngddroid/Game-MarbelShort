@@ -12,6 +12,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -121,7 +122,7 @@ import kotlin.math.cos
 import kotlin.math.sin
 import com.puzzel.lab.marbelshort.core.Analytics
 
-private enum class Overlay { NONE, INTRO, TUTORIAL, PAUSE, WIN, FAIL, BUY }
+private enum class Overlay { NONE, WORLD, INTRO, TUTORIAL, PAUSE, WIN, FAIL, BUY }
 
 private val PopupText = TextStyle(fontFamily = Fredoka, fontWeight = FontWeight.SemiBold, fontSize = 17.sp, color = GameColors.Ink, textAlign = TextAlign.Center, lineHeight = 23.sp)
 
@@ -138,7 +139,10 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
     val newFeatures = remember(screen) { Feature.presentIn(spec).filter { it.ordinal !in repo.seenFeatures.value } }
     var introIndex by remember(screen) { mutableIntStateOf(0) }
     var tutorialIndex by remember(screen) { mutableIntStateOf(-1) }   // -1 = not started, size = done
-    var overlay by remember(screen) { mutableStateOf(if (newFeatures.isNotEmpty()) Overlay.INTRO else Overlay.NONE) }
+    // First level played in a world the player has just reached: a "New World!" card before anything else.
+    val newWorld = remember(screen) { repo.themeForLevel(spec.number).takeIf { !screen.daily && it > repo.seenTheme.intValue } }
+    val afterWorld = if (newFeatures.isNotEmpty()) Overlay.INTRO else Overlay.NONE
+    var overlay by remember(screen) { mutableStateOf(if (newWorld != null) Overlay.WORLD else afterWorld) }
     var comboCount by remember { mutableIntStateOf(0) }
     var comboStamp by remember { mutableLongStateOf(0L) }
     var hammerMode by remember { mutableStateOf(false) }
@@ -179,7 +183,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
             var last = 0L
             while (isActive) {
                 withFrameNanos { now ->
-                    if (last != 0L && overlay != Overlay.PAUSE && overlay != Overlay.INTRO && overlay != Overlay.TUTORIAL && overlay != Overlay.BUY) {
+                    if (last != 0L && overlay != Overlay.PAUSE && overlay != Overlay.WORLD && overlay != Overlay.INTRO && overlay != Overlay.TUTORIAL && overlay != Overlay.BUY) {
                         engine.update((now - last) / 1_000_000_000f)
                     }
                     last = now
@@ -307,6 +311,13 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
         }
 
         // ---------------- overlays (each animates in and out)
+        PopupHost(visible = overlay == Overlay.WORLD) {
+            if (newWorld != null) NewWorldContent(newWorld) {
+                repo.markThemeSeen(newWorld)
+                sound.play(Sfx.BUTTON)
+                overlay = afterWorld
+            }
+        }
         PopupHost(visible = overlay == Overlay.INTRO) {
             newFeatures.getOrNull(introIndex)?.let { f ->
                 val lastCard = introIndex == newFeatures.size - 1
@@ -498,6 +509,29 @@ private fun Pedestal(modifier: Modifier, glow: Color = Color(0xFFFFE680), conten
             drawOval(Color(0x332A1463), Offset(size.width * 0.2f, size.height * 0.84f), Size(size.width * 0.6f, size.height * 0.12f))
         }
         content()
+    }
+}
+
+@Composable
+private fun NewWorldContent(world: Int, onOk: () -> Unit) {
+    val t = Themes.get(world)
+    GamePanel("New World!", ribbon = BtnColor.Green, rays = true) {
+        Chip("WORLD ${world + 1}", BtnColor.Purple)
+        Spacer(Modifier.height(8.dp))
+        Box(Modifier.size(230.dp, 150.dp).idleBounce(amount = 0.03f).clip(RoundedCornerShape(18.dp)).border(3.dp, Color.White, RoundedCornerShape(18.dp))) {
+            ThemePreview(t)
+        }
+        Spacer(Modifier.height(10.dp))
+        OutlinedText(t.name, fontSize = 30.sp, brush = Grad.Gold, gloss = true, maxLines = 1)
+        Spacer(Modifier.height(6.dp))
+        val next = Themes.all.getOrNull(world + 1)
+        Text(
+            if (next != null) "You unlocked a new world! Your levels look like this until level ${next.unlockLevel}."
+            else "You unlocked the final world. Enjoy it all the way to the top!",
+            style = PopupText,
+        )
+        Spacer(Modifier.height(18.dp))
+        GameButton("Let's go!", Modifier.fillMaxWidth(), color = BtnColor.Green, shine = true) { onOk() }
     }
 }
 

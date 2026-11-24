@@ -116,11 +116,12 @@ fun DrawScope.drawScenery(n: Int, world: Int) {
     val kind = rnd.nextInt(3)
     val tint = rnd.nextInt(4)
     drawOval(Color(0x2E140A3C), Offset(cx - s * 0.34f, by - s * 0.05f), Size(s * 0.68f, s * 0.12f))
-    when (world.mod(5)) {
+    when (com.puzzel.lab.marbelshort.render.Themes.get(world).scenery) {
         0 -> when (kind) { 0 -> lollipop(cx, by, s, tint); 1 -> candyCane(cx, by, s); else -> gumdrop(cx, by, s, tint) }
         1 -> when (kind) { 0 -> seaweed(cx, by, s); 1 -> coral(cx, by, s, tint); else -> shell(cx, by, s) }
         2 -> when (kind) { 0 -> planet(cx, by - s * 0.3f, s, tint); 1 -> moon(cx, by - s * 0.3f, s); else -> starCluster(cx, by - s * 0.3f, s) }
         3 -> when (kind) { 0 -> crystals(cx, by, s, tint); 1 -> palm(cx, by, s); else -> cactus(cx, by, s) }
+        5 -> when (kind) { 0 -> snowyPine(cx, by, s); 1 -> snowman(cx, by, s); else -> crystals(cx, by, s, 1) }
         else -> when (kind) { 0 -> pine(cx, by, s); 1 -> mushroom(cx, by, s); else -> bush(cx, by, s) }
     }
     // a couple of tiny sparkles near the prop
@@ -347,4 +348,42 @@ private fun DrawScope.bush(cx: Float, by: Float, s: Float) {
     for ((dx, dy, r) in blobs) drawCircle(Brush.verticalGradient(listOf(Color(0xFF7BE07F), Color(0xFF2A9A5C)), by + (dy - r) * s, by + (dy + r) * s), r * s, Offset(cx + dx * s, by + dy * s))
     for (k in 0 until 4) drawCircle(Color(0xFFFF4D6D), s * 0.045f, Offset(cx + (k - 1.5f) * s * 0.14f, by - s * (0.3f + (k % 2) * 0.16f)))
     drawOval(Color.White.copy(alpha = 0.35f), Offset(cx - s * 0.16f, by - s * 0.62f), Size(s * 0.22f, s * 0.1f))
+}
+
+// ---------------- Frosty Peaks
+
+private fun DrawScope.snowyPine(cx: Float, by: Float, s: Float) {
+    drawRoundRect(Color(0xFF6B4A3E), Offset(cx - s * 0.06f, by - s * 0.2f), Size(s * 0.12f, s * 0.2f), CornerRadius(s * 0.03f))
+    val tiers = listOf(Triple(0.18f, 0.4f, Color(0xFF2E7A78)), Triple(0.42f, 0.33f, Color(0xFF3A938C)), Triple(0.64f, 0.25f, Color(0xFF4DAEA2)))
+    for ((y, hw, col) in tiers) {
+        val base = by - s * y
+        val tip = base - s * 0.42f
+        val p = Path().apply { moveTo(cx - s * hw, base); lineTo(cx, tip); lineTo(cx + s * hw, base); close() }
+        drawPath(p, col)
+        // snow cap on the upper half of each tier
+        val cap = Path().apply {
+            moveTo(cx, tip); lineTo(cx + s * hw * 0.55f, tip + s * 0.24f)
+            quadraticTo(cx + s * hw * 0.2f, tip + s * 0.3f, cx, tip + s * 0.24f)
+            quadraticTo(cx - s * hw * 0.25f, tip + s * 0.31f, cx - s * hw * 0.55f, tip + s * 0.24f); close()
+        }
+        drawPath(cap, Color.White)
+        outlinePath(p, 1.8.dp.toPx())
+    }
+}
+
+private fun DrawScope.snowman(cx: Float, by: Float, s: Float) {
+    val body = listOf(Triple(0f, -0.24f, 0.25f), Triple(0f, -0.6f, 0.18f))
+    for ((dx, dy, r) in body) {
+        val c = Offset(cx + dx * s, by + dy * s)
+        drawCircle(Brush.verticalGradient(listOf(Color.White, Color(0xFFCFE6F7)), c.y - r * s, c.y + r * s), r * s, c)
+        drawCircle(Ink.copy(alpha = 0.5f), r * s, c, style = Stroke(1.8.dp.toPx()))
+    }
+    val head = Offset(cx, by - s * 0.6f)
+    drawCircle(Ink, s * 0.025f, head + Offset(-s * 0.06f, -s * 0.04f))
+    drawCircle(Ink, s * 0.025f, head + Offset(s * 0.06f, -s * 0.04f))
+    drawPath(Path().apply { moveTo(head.x, head.y); lineTo(head.x + s * 0.16f, head.y + s * 0.03f); lineTo(head.x, head.y + s * 0.05f); close() }, Color(0xFFFF8A1F))
+    // scarf
+    drawRoundRect(Color(0xFFFF4D6D), Offset(cx - s * 0.17f, by - s * 0.46f), Size(s * 0.34f, s * 0.07f), CornerRadius(s * 0.03f))
+    drawRoundRect(Color(0xFFFF4D6D), Offset(cx + s * 0.06f, by - s * 0.43f), Size(s * 0.07f, s * 0.16f), CornerRadius(s * 0.03f))
+    for (k in 0 until 2) drawCircle(Ink.copy(alpha = 0.7f), s * 0.025f, Offset(cx, by - s * (0.3f - k * 0.1f)))
 }
