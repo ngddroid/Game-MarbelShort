@@ -110,9 +110,9 @@ class GameRenderer(
         for (c in colors) {
             sprites.marbleShadowed(c, skin, l.marbleR)
             sprites.marbleShadowed(c, skin, l.hopperR)
-            sprites.marble(c, skin, l.marbleR * 0.9f)
+            sprites.marble(c, skin, l.cupMarbleR)
             sprites.block(c, 0, l.cell, skin, true); sprites.block(c, 0, l.cell, skin, false)
-            sprites.cup(c, false, l.cupW, l.cupH)
+            sprites.cup(c, false, l.cupW, l.cupH, l.cupHoleR)
         }
         sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.marbleR)
         sprites.marbleShadowed(MarbleColors.RAINBOW, skin, l.hopperR)
@@ -677,7 +677,7 @@ class GameRenderer(
 
     private fun drawCups(c: Canvas) {
         val w = l.cupW; val h = l.cupH
-        val mr = l.marbleR * 0.9f
+        val mr = l.cupMarbleR
         for ((ci, col) in engine.tray.withIndex()) {
             val cx = l.colCenter(ci)
             var last = col.cups.size - 1
@@ -701,7 +701,7 @@ class GameRenderer(
                 c.scale(scale * sh * flip * (1f + bounce * 0.04f), scale * sh * (1f - bounce * 0.04f), cx, y + h)
                 val hiddenNow = cup.hidden && cup.reveal < 0.5f
                 dst.set(cx - w / 2, y, cx + w / 2, y + h)
-                c.drawBitmap(sprites.cup(cup.color, hiddenNow, w, h), null, dst, bmpPaint)
+                c.drawBitmap(sprites.cup(cup.color, hiddenNow, w, h, l.cupHoleR), null, dst, bmpPaint)
                 if (!hiddenNow) for (k in 0 until cup.arrived.coerceAtMost(3)) {
                     val mx = cx + l.dimpleDx[k]; val my = y + l.dimpleDy
                     dst.set(mx - mr, my - mr, mx + mr, my + mr)
@@ -719,8 +719,8 @@ class GameRenderer(
             val r = when (m.state) {
                 MarbleState.PATH, MarbleState.PHYSICS -> l.hopperR
                 MarbleState.BOARDING -> { val k = m.t.coerceIn(0f, 1f); l.hopperR + (beltMarbleR - l.hopperR) * k * (2f - k) }
-                // shrink from belt size to cup size on the way into the cup
-                MarbleState.DROPPING -> { val k = m.t.coerceIn(0f, 1f); beltMarbleR + (l.marbleR * 0.9f - beltMarbleR) * k }
+                // belt size to cup size on the way into the cup (the same size unless the cup is narrow)
+                MarbleState.DROPPING -> { val k = m.t.coerceIn(0f, 1f); beltMarbleR + (l.cupMarbleR - beltMarbleR) * k }
                 else -> l.marbleR
             }
             marbleAt(c, m.x, m.y, m.color, r = r)

@@ -17,7 +17,8 @@ import kotlin.math.sqrt
  */
 object LevelGenerator {
     const val MAX_LEVEL = 5000
-    private const val MAX_CAPACITY = 48
+    /** Belt slots at most: 28 balls of GameLayout.BALL_R fit side by side on the belt. */
+    private const val MAX_CAPACITY = 28
     private const val MIN_CAPACITY = 14
     private const val MAX_COLORS = 10
     /** Levels 1..10 stay an easy tutorial. */

@@ -128,7 +128,7 @@ Blocks that are open are drawn raised and glossy, with their marbles visible. Bl
 4. **Colours** are spread over the plan.
 5. **Special kinds** are assigned *consistently with the plan*. For example, the key is popped before its chains, and a counter's `param` is never larger than the pops that happen before it.
 6. **Cups** are built from the plan (3 per block), shuffled within a difficulty "window", then dealt into 4 or 5 columns. Some cups are hidden.
-7. **Verify** with `PuzzleSim`. The belt **capacity is the plan's peak load plus a difficulty margin** (clamped to 14…48). If the peak is too high, the window shrinks and it retries; if that fails, the generator uses a fresh seed.
+7. **Verify** with `PuzzleSim`. The belt **capacity is the plan's peak load plus a difficulty margin** (clamped to 14…28: 28 balls of `GameLayout.BALL_R` fit on the belt. Before 2026-11-24 the limit was 48; most levels then needed 32–38 slots. With 28, the generator mixes the cup order a little less to keep the peak low. Boards, colours and special blocks are unchanged, and no level falls back to the simple board. Capacity is now about 25 from level 31 on). If the peak is too high, the window shrinks and it retries; if that fails, the generator uses a fresh seed.
 
 **Difficulty curve (retuned 2026-11-21: "hard much sooner" plus a tighter belt):**
 - **Levels 1–10** (`TUTORIAL_LEVELS`) are the unchanged hand-made tutorial.
@@ -151,7 +151,7 @@ Blocks that are open are drawn raised and glossy, with their marbles visible. Bl
   - Each key chains 2–4 blocks.
   - Levels 11–30 get one more of each of their special blocks (keys excepted).
   - Averages: about 17–20 special blocks and 3–5 hidden cups per level from 31 on.
-- **Measured win rates** (no boosters):
+- **Measured win rates** (no boosters; measured before the 28-slot belt cap of 2026-11-24, so re-measure):
 
   | Levels | Smart player | Perfect-play bot |
   |---|---|---|
@@ -224,7 +224,7 @@ FLYING: arrow blocks without a path and hammered blocks fly to the hopper mouth 
 
 ### Funnel capacity: the funnel fills up to the line under the board, then "WAIT!"
 Balls fill the whole funnel, up to the line just under the bottom row of blocks. Only when it is full does a tap get refused. Balls never gather up in the board.
-- **`hopperCap` is measured per level.** At level start `measureFunnel()` silently drops test balls spread across the funnel (golden-ratio steps) through the real physics and lets each one settle. It counts how many fit before the settled pile reaches the line (centre above `gridBottom + 0.25·r`), minus a small slack (1, or capacity/15) for balls still rolling in. Typical values are 22–40 balls, about 3–4 blocks.
+- **`hopperCap` is measured per level.** At level start `measureFunnel()` silently drops test balls spread across the funnel (golden-ratio steps) through the real physics and lets each one settle. It counts how many fit before the settled pile reaches the line (centre above `gridBottom + 0.25·r`), minus a small slack (1, or capacity/15) for balls still rolling in. With 21-unit balls on tall phones it is typically 20–25 balls (at least one x2 block of 18).
 - **All or nothing:** `funnelHasRoom(block)` lets a block release only if all of its balls fit: balls in the funnel or on their way, plus its own 9 (18 for x2), must fit within `hopperCap`, and the settled pile must not have reached the line anywhere (`pileAtLine()`, e.g. a corner under a side exit). An empty funnel always takes one block. Otherwise the block stays closed and whole, wobbles, and "WAIT!" floats over the funnel. `hammer()` refuses the same way without using up the booster. An opened block never keeps balls back: all of them leave together, with only the short start stagger. (A version that let the leftover balls wait inside the opened block was removed at the user's request.)
 - **Physics that fills the width:**
   - Gravity rolls balls down the slopes. The only centre drift is a small non-accumulating creep near the pipe mouth (a drift added to `x` but not to `px` acts like sideways gravity and stacked balls into a tower).
@@ -298,10 +298,10 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
   - `block(color, variant, size, skin, open)`, which has separate open and closed versions that cross-fade via `BlockVisual.open`.
   - `cup`, `socket`, `hub`, and `overlay` (cage, chains, crate, ice, key, arrow, bomb, bucket, switch).
 - **Board vs. HUD:** `GameScreen` passes the bottom of the HUD (status bar + 150dp: top row, booster tray and a small gap) as `topInset`. `GameLayout` keeps `boardPadTop` (= `BOARD_FRAME` 24 + 10) above the top row, because the board frame reaches 24 units above the grid. `LayoutFitTest` lays out all 5000 levels on six phone and tablet screens. It checks that the frame stays below the HUD, that the belt clears the funnel, and that at least 3 cup rows are visible. **Run it after changing the HUD, `GameLayout` or the board frame.** (Fixed 2026-11-24: tall boards such as level 111 had their top blocks under the booster tray.)
-- **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` (`cell * 0.16`, kept between 14 and 19, so the funnel (110–170 units tall) holds about 1–2 blocks of balls) while they travel through the board, the hopper and the pipe. The spout width, gate and hopper physics are sized from it. On the belt they keep the same size (`GameLayout.beltMarbleR = min(hopperR, belt fit)`) and sit side by side, like the reference art (2026-11-24).
-  - *Belt fit* is the largest radius at which `capacity` marbles fit on the belt (`0.49 · length / capacity`). Up to about 31 slots that is the full funnel size; on more crowded belts the marbles shrink a little while boarding.
+- **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` while they travel through the board, the hopper and the pipe. Since 2026-11-24 it is `BALL_R` = 21, the size in the reference art (about 42 px on a 720-wide screen), on tall phones. It scales down to `MIN_BALL_R` = 14 on short screens (16:9 phones, tablets), following `roomy` (the height below the HUD, 940 → 1240 units). The funnel grows with it, from 110–170 to 170–250 units tall, so it still holds an x2 block (18 balls); short screens could not fit both big balls and a usable board. The spout width, gate and hopper physics are sized from it. On the belt they keep the same size (`GameLayout.beltMarbleR = min(hopperR, belt fit)`) and sit side by side, like the reference art (2026-11-24).
+  - *Belt fit* is the largest radius at which `capacity` marbles fit on the belt (`0.49 · length / capacity`). With at most 28 slots that is always the full ball size. Only the +6 slots booster (or Continue) makes belt marbles a little smaller.
   - The belt grows with the marble: `beltR = 22 + beltMarbleR`, which keeps the gauge island the same size, and the tray moves down to clear the housing.
-  - Marbles shrink to cup size (`0.9 · marbleR`, where `marbleR` = 12) while they drop into a cup.
+  - Cup marbles use `GameLayout.cupMarbleR`: the belt size, capped so three fit in a cup with a thin wall between the holes (`0.43 · HOLE_SPREAD · cupW`) and fit its height (`0.27 · cupH`). That is about 15.7 units with 4 columns and 14 with 5 (it was a fixed 10.8 before 2026-11-24). Cup holes are drawn at `1.04 · cupMarbleR`, with centres `MachineArt.HOLE_SPREAD` (0.29) · cupW apart. A marble changes from belt to cup size while it drops.
 - **Block colours:** blocks and cups use solid, saturated marble colours, as in the reference (palette in `MarbleColors`).
   - Blocked blocks are a solid sealed lid with no marbles shown.
   - Open blocks show their 9 marbles.

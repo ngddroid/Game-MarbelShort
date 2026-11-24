@@ -317,9 +317,12 @@ class SpriteCache(val pxPerUnit: Float) {
         }
     }
 
-    fun cup(colorId: Int, hidden: Boolean, wUnits: Float, hUnits: Float): Bitmap {
+    fun cup(colorId: Int, hidden: Boolean, wUnits: Float, hUnits: Float, holeUnits: Float): Bitmap {
         val w = (wUnits * pxPerUnit).toInt(); val h = (hUnits * pxPerUnit).toInt()
-        return map.getOrPut(key(3, colorId, if (hidden) 1 else 0, w * 7 + h)) { make(w, h) { MachineArt.puck(it, 0f, 0f, w.toFloat(), h.toFloat(), colorId, hidden) } }
+        val hole = holeUnits * pxPerUnit
+        return map.getOrPut(key(3, colorId, (if (hidden) 1 else 0) or (hole.toInt() shl 1), w * 7 + h)) {
+            make(w, h) { MachineArt.puck(it, 0f, 0f, w.toFloat(), h.toFloat(), colorId, hidden, hole) }
+        }
     }
 
     fun gear(radiusUnits: Float, tint: Int): Bitmap {

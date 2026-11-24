@@ -13,9 +13,19 @@ import kotlin.math.sin
 class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: LevelSpec) {
     val worldW = 720f
     val cx = worldW / 2f
-    /** Base marble radius for the cups (cup marbles are drawn at 0.9 of it). */
+    /** Base size class for small marble sprites (flying marbles); cup marbles use [cupMarbleR]. */
     val marbleR = 12f
-    private val maxHopperR = 19f
+    /**
+     * How roomy the screen is, 0..1: 1 on tall phones (20:9, about 1260+ units below the HUD),
+     * 0 on short 16:9 screens and tablets (about 940). Ball size and funnel height follow it.
+     */
+    private val roomy = ((worldH - topInset - bottomInset - 940f) / 300f).coerceIn(0f, 1f)
+    /**
+     * Ball radius when released from a block and on the belt: [BALL_R] (the reference art, ~42 px on
+     * 720) on tall phones, down to 14 on short screens, where the funnel can't hold 18 big balls of an
+     * x2 block without shrinking the board too much.
+     */
+    private val maxHopperR = MIN_BALL_R + (BALL_R - MIN_BALL_R) * roomy
 
     /** Belt radius that keeps the island (gauge) inside the track the same size for any belt marble radius. */
     private fun beltRFor(r: Float) = 22f + r
@@ -71,7 +81,8 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     init {
         val estBeltR = beltFit // the real belt marble can only be this size or smaller
         val belowFunnel = 46f + maxHopperR + estBeltR + 6f + beltRFor(estBeltR) + trayGap(estBeltR)
-        val minFunnel = 110f; val maxFunnel = 170f
+        // bigger balls need a taller funnel to hold an x2 block (18 balls)
+        val minFunnel = 110f + 60f * roomy; val maxFunnel = 170f + 80f * roomy
         val rowsMin = 3.2f; val rowsMax = 4.3f
         val avail = worldH - bottomInset - topInset - boardPadTop - boardPad - belowFunnel
         var c = min((worldW - 90f) / gridW, 128f)
@@ -90,8 +101,8 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     val gridRight = cx + cell * gridW / 2f
 
     // ---- hopper & spout
-    /** Bigger radius for marbles that burst out of a block (path, hopper, spout); belt marbles keep this size when the belt has room. */
-    val hopperR = (cell * 0.16f).coerceIn(14f, maxHopperR)
+    /** Radius of marbles that burst out of a block (path, hopper, spout); belt marbles keep this size when the belt has room. */
+    val hopperR = maxHopperR
     val spoutTop = gridBottom + funnelH
     val spoutHalf = hopperR * 1.3f
     val gateY = spoutTop + 46f
@@ -118,8 +129,16 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
     fun cupTop(index: Float) = trayTop + index * (cupH + cupGap)
 
     /** Hole centres of a cup (see MachineArt.puck): x offsets from the column centre, y from the cup top. */
-    val dimpleDx = floatArrayOf(-cupW * 0.27f, 0f, cupW * 0.27f)
+    val dimpleDx = floatArrayOf(-cupW * HOLE_SPREAD, 0f, cupW * HOLE_SPREAD)
     val dimpleDy = cupH * 0.42f
+    /**
+     * Radius of marbles sitting in a cup: the belt size, capped so three fit side by side in a cup
+     * with a thin wall between the holes (HOLE_SPREAD · cupW apart) and fit the cup's height.
+     * 4 columns: about 15.7 units (height-limited); 5 columns: about 14 units (was 10.8 for all).
+     */
+    val cupMarbleR = minOf(beltMarbleR, cupW * HOLE_SPREAD * 0.43f, cupH * 0.27f)
+    /** Hole radius in the cup art: just wider than the marble, so it reads as sitting in the hole. */
+    val cupHoleR = cupMarbleR * 1.04f
 
     fun active(c: Int, r: Int) = c in 0 until gridW && r in 0 until gridH && mask[r * gridW + c]
     fun cellLeft(c: Int) = gridLeft + c * cell
@@ -154,5 +173,14 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
         const val BOARD_FRAME = 24f
         private const val BELT_LEFT = 76f
         private const val BELT_RIGHT = 644f
+        /**
+         * Ball radius for released and belt balls. The belt holds 28 balls of this size side by side,
+         * which is why LevelGenerator caps capacity at 28.
+         */
+        const val BALL_R = 21f
+        /** Ball radius on short screens (16:9 phones, tablets). */
+        const val MIN_BALL_R = 14f
+        /** Must match MachineArt.HOLE_SPREAD (cup hole centres at ± spread · cupW). */
+        private const val HOLE_SPREAD = 0.29f
     }
 }

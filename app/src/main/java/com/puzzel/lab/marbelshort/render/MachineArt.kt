@@ -23,6 +23,8 @@ import kotlin.random.Random
  * lighting layer (specular, caustic, rim) so they look like they really roll.
  */
 object MachineArt {
+    /** Cup hole centres sit at x ± w * HOLE_SPREAD (wide enough for belt-size marbles in 5 columns). */
+    const val HOLE_SPREAD = 0.29f
     private val p = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val path = Path()
     private val path2 = Path()
@@ -433,9 +435,10 @@ object MachineArt {
     /**
      * Tray cup — a "jelly box" in the same candy style as the board blocks: a rounded box with a darker
      * depth side, a glossy face with a white bevel, and 3 recessed holes the marbles drop into.
-     * Hole centres: x ± w * 0.27, y + h * 0.42 (kept in sync with GameLayout.dimpleDx / dimpleDy).
+     * Hole centres: x ± w * [HOLE_SPREAD], y + h * 0.42 (GameLayout.dimpleDx / dimpleDy use the same).
+     * [holeR] sizes the holes to the marbles that drop in (GameLayout.cupHoleR); menus leave it null.
      */
-    fun puck(c: Canvas, x: Float, y: Float, w: Float, h: Float, colorId: Int, hidden: Boolean) {
+    fun puck(c: Canvas, x: Float, y: Float, w: Float, h: Float, colorId: Int, hidden: Boolean, holeR: Float? = null) {
         val base = if (hidden) 0xFF8A5CFF.toInt() else Painter.colorOf(colorId)
         val white = colorId == 8 && !hidden
         val padX = w * 0.035f
@@ -474,9 +477,10 @@ object MachineArt {
         }
         // holes
         val hy = y + h * 0.42f
-        val rx = minOf(w * 0.105f, h * 0.25f); val ry = minOf(h * 0.21f, rx * 0.86f)
+        val rx = holeR ?: minOf(w * 0.105f, h * 0.25f)
+        val ry = if (holeR != null) holeR * 0.94f else minOf(h * 0.21f, rx * 0.86f)
         for (k in -1..1) {
-            val hx = x + w / 2 + k * w * 0.27f
+            val hx = x + w / 2 + k * w * HOLE_SPREAD
             rect.set(hx - rx, hy - ry, hx + rx, hy + ry)
             p.color = 0x78FFFFFF; rect.offset(0f, h * 0.022f); c.drawOval(rect, p); rect.offset(0f, -h * 0.022f)
             p.alpha = 255; p.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, Col.darken(base, 0.78f), Col.darken(base, 0.45f), Shader.TileMode.CLAMP)
