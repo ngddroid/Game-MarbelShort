@@ -347,7 +347,7 @@ The full visual spec is in **UI_GRAPHICS_PLAN.md** ("Candy Glass Factory": gloss
 **Flow:** Splash → Onboarding (first launch only, 4 swipeable pages, no skip button) → Main.
 
 ### Worlds (`render/Themes.kt`)
-Themes are **worlds that unlock by progress**, not shop items. `Themes.all` is in unlock order. A level uses the world with the highest `unlockLevel` at or below its number (`Themes.indexForLevel`, also `LevelGenerator.themeFor`). In game, `GameRepository.themeForLevel(n)` caps `n` at the player's highest level, so a daily challenge or an ad-unlocked level far ahead never shows a world the player hasn't reached.
+Themes are **worlds that unlock by progress**, not shop items. `Themes.all` is in unlock order. A level uses the world with the highest `unlockLevel` at or below its number (`Themes.indexForLevel`, also `LevelGenerator.themeFor`). In game, `GameRepository.themeForLevel(n, daily)` uses the level's own world, the same one the map shows, so a level unlocked early with an ad (e.g. 82 while the player is on 5) is shown in its world (Forest). Only daily challenges, which pick a random level from 100 to 3099, are capped at the player's highest level so they never reveal a far-off world.
 
 | # | World | From level | Map scenery |
 |---|---|---|---|

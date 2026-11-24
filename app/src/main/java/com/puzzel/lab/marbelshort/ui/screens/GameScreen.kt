@@ -140,7 +140,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
     var introIndex by remember(screen) { mutableIntStateOf(0) }
     var tutorialIndex by remember(screen) { mutableIntStateOf(-1) }   // -1 = not started, size = done
     // First level played in a world the player has just reached: a "New World!" card before anything else.
-    val newWorld = remember(screen) { repo.themeForLevel(spec.number).takeIf { !screen.daily && it > repo.seenTheme.intValue } }
+    val newWorld = remember(screen) { repo.themeForLevel(spec.number, screen.daily).takeIf { !screen.daily && it > repo.seenTheme.intValue } }
     val afterWorld = if (newFeatures.isNotEmpty()) Overlay.INTRO else Overlay.NONE
     var overlay by remember(screen) { mutableStateOf(if (newWorld != null) Overlay.WORLD else afterWorld) }
     var comboCount by remember { mutableIntStateOf(0) }
@@ -164,7 +164,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
         }
     }
 
-    BoxWithConstraints(Modifier.fillMaxSize().background(Color(Themes.get(repo.themeForLevel(spec.number)).bgBottom))) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color(Themes.get(repo.themeForLevel(spec.number, screen.daily)).bgBottom))) {
         val wPx = constraints.maxWidth
         val hPx = constraints.maxHeight
         val scale = wPx / 720f
@@ -174,7 +174,7 @@ fun GameScreen(screen: Screen.Game, nav: Nav) {
             val layout = GameLayout(hPx / scale, hudPx / scale, 8f, spec)
             GameEngine(spec, layout, listener)
         }
-        val theme = Themes.get(repo.themeForLevel(spec.number))
+        val theme = Themes.get(repo.themeForLevel(spec.number, screen.daily))
         val renderer = remember(engine) { GameRenderer(engine, theme, repo.skin.intValue, wPx, hPx) }
         DisposableEffect(renderer) { onDispose { renderer.release() } }
 

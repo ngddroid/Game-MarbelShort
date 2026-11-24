@@ -191,10 +191,12 @@ class GameRepository(context: Context) {
     fun isThemeUnlocked(i: Int) = i <= unlockedTheme
 
     /**
-     * Theme used for level [n]: its own world, but never one the player hasn't reached yet (daily
-     * challenges and ad-unlocked levels can be far ahead), so worlds are only ever revealed by progress.
+     * Theme used for level [n]: its own world (the same one the map shows), also for a level unlocked
+     * early with an ad. A daily challenge is a random level from 100 to 3099, so it is capped at the
+     * player's progress instead and never shows a far-off world at random.
      */
-    fun themeForLevel(n: Int): Int = Themes.indexForLevel(minOf(n, level.intValue))
+    fun themeForLevel(n: Int, daily: Boolean = false): Int =
+        Themes.indexForLevel(if (daily) minOf(n, level.intValue) else n)
 
     fun markThemeSeen(i: Int) {
         if (i <= seenTheme.intValue) return
