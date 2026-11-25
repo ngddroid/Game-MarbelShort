@@ -433,57 +433,74 @@ object MachineArt {
     // =================================================================== cups (cylindrical pucks)
 
     /**
-     * Tray cup — a "jelly box" in the same candy style as the board blocks: a rounded box with a darker
-     * depth side, a glossy face with a white bevel, and 3 recessed holes the marbles drop into.
+     * Tray cup — a "lid box": a solid jelly body whose front face shows below a pale, glossy lid,
+     * with 3 round holes in the lid that the marbles drop into.
      * Hole centres: x ± w * [HOLE_SPREAD], y + h * 0.42 (GameLayout.dimpleDx / dimpleDy use the same).
      * [holeR] sizes the holes to the marbles that drop in (GameLayout.cupHoleR); menus leave it null.
      */
     fun puck(c: Canvas, x: Float, y: Float, w: Float, h: Float, colorId: Int, hidden: Boolean, holeR: Float? = null) {
         val base = if (hidden) 0xFF8A5CFF.toInt() else Painter.colorOf(colorId)
         val white = colorId == 8 && !hidden
-        val padX = w * 0.035f
+        val padX = w * 0.03f
         val top = y + h * 0.02f
         val bottom = y + h * 0.95f
-        val depth = h * 0.14f
-        val rad = minOf(w * 0.11f, h * 0.3f)
+        val front = h * 0.2f                                   // visible front face of the body below the lid
+        val rad = minOf(w * 0.12f, h * 0.32f)
         val box = RectF(x + padX, top, x + w - padX, bottom)
+        val bodyTop = if (white) 0xFFDCE0EC.toInt() else base
+        val bodyBottom = if (white) 0xFFB4BACD.toInt() else Col.darken(base, 0.28f)
+        val lidTop = if (white) Color.WHITE else Col.lighten(base, 0.66f)
+        val lidBottom = if (white) 0xFFEEF0F7.toInt() else Col.lighten(base, 0.42f)
+        val edge = if (white) 0xFF8C93AE.toInt() else Col.darken(base, 0.45f)
         reset()
-        // soft contact shadow + depth side
+        // soft contact shadow
         p.color = 0x40281468
-        rect.set(box.left + w * 0.03f, box.top + depth, box.right - w * 0.03f, bottom + h * 0.04f)
+        rect.set(box.left + w * 0.03f, box.top + front, box.right - w * 0.03f, bottom + h * 0.05f)
         c.drawRoundRect(rect, rad, rad, p)
-        p.color = Col.darken(base, if (white) 0.22f else 0.3f)
-        rect.set(box.left, box.top + depth, box.right, box.bottom)
-        c.drawRoundRect(rect, rad, rad, p)
-        // face
-        val face = RectF(box.left, box.top, box.right, box.bottom - depth)
-        p.alpha = 255; p.shader = LinearGradient(0f, face.top, 0f, face.bottom,
-            intArrayOf(Col.lighten(base, 0.25f), base, Col.darken(base, 0.04f)), floatArrayOf(0f, 0.55f, 1f), Shader.TileMode.CLAMP)
-        c.drawRoundRect(face, rad, rad, p); p.shader = null
-        // white bevel + outline + glint
+        // body: the solid jelly, its front face shows under the lid
+        p.alpha = 255; p.shader = LinearGradient(0f, box.top, 0f, box.bottom, bodyTop, bodyBottom, Shader.TileMode.CLAMP)
+        c.drawRoundRect(box, rad, rad, p); p.shader = null
+        // a soft shine across the front face
+        p.color = Col.alpha(Color.WHITE, if (white) 70 else 55)
+        rect.set(box.left + w * 0.06f, box.bottom - front * 0.62f, box.right - w * 0.06f, box.bottom - front * 0.4f)
+        c.drawRoundRect(rect, h * 0.05f, h * 0.05f, p)
+        // lid
+        val lid = RectF(box.left, box.top, box.right, box.bottom - front)
+        p.color = Col.alpha(edge, 110)                          // lip shadow where the lid sits on the body
+        rect.set(lid); rect.offset(0f, h * 0.035f); c.drawRoundRect(rect, rad, rad, p)
+        p.alpha = 255; p.shader = LinearGradient(0f, lid.top, 0f, lid.bottom, lidTop, lidBottom, Shader.TileMode.CLAMP)
+        c.drawRoundRect(lid, rad, rad, p); p.shader = null
+        // lid bevel: bright top edge
         p.style = Paint.Style.STROKE
-        p.strokeWidth = h * 0.035f; p.color = 0x96FFFFFF.toInt()
-        rect.set(face); rect.inset(w * 0.03f, h * 0.055f)
+        p.strokeWidth = h * 0.03f; p.color = 0xB4FFFFFF.toInt()
+        rect.set(lid); rect.inset(w * 0.025f, h * 0.045f)
         c.drawRoundRect(rect, rad * 0.8f, rad * 0.8f, p)
-        p.strokeWidth = h * 0.028f; p.color = Col.alpha(if (white) 0xFF8C93AE.toInt() else Col.darken(base, 0.5f), 200)
+        // outline
+        p.strokeWidth = h * 0.028f; p.color = Col.alpha(edge, 210)
         c.drawRoundRect(box, rad, rad, p)
+        p.strokeWidth = h * 0.02f; p.color = Col.alpha(edge, 120)
+        c.drawRoundRect(lid, rad, rad, p)
         p.style = Paint.Style.FILL
-        p.color = 0xDCFFFFFF.toInt()
-        rect.set(face.left + w * 0.07f, face.top + h * 0.09f, face.left + w * 0.22f, face.top + h * 0.16f)
+        // glint
+        p.color = 0xE6FFFFFF.toInt()
+        rect.set(lid.left + w * 0.06f, lid.top + h * 0.08f, lid.left + w * 0.17f, lid.top + h * 0.15f)
         c.drawOval(rect, p)
         if (hidden) {
-            Painter.text(c, "?", x + w / 2, face.centerY() + h * 0.01f, h * 0.62f, 0xFFFFD54A.toInt(), 0xFF3B1F7A.toInt(), h * 0.1f)
+            Painter.text(c, "?", x + w / 2, lid.centerY() + h * 0.02f, h * 0.56f, 0xFFFFD54A.toInt(), 0xFF3B1F7A.toInt(), h * 0.1f)
             return
         }
-        // holes
+        // holes: a dark well with a soft rim shadow above and a light lip below
         val hy = y + h * 0.42f
         val rx = holeR ?: minOf(w * 0.105f, h * 0.25f)
         val ry = if (holeR != null) holeR * 0.94f else minOf(h * 0.21f, rx * 0.86f)
+        val wellTop = if (white) 0xFF6E7590.toInt() else Col.darken(base, 0.7f)
+        val wellBottom = if (white) 0xFFA4AAC0.toInt() else Col.darken(base, 0.38f)
         for (k in -1..1) {
             val hx = x + w / 2 + k * w * HOLE_SPREAD
             rect.set(hx - rx, hy - ry, hx + rx, hy + ry)
-            p.color = 0x78FFFFFF; rect.offset(0f, h * 0.022f); c.drawOval(rect, p); rect.offset(0f, -h * 0.022f)
-            p.alpha = 255; p.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, Col.darken(base, 0.78f), Col.darken(base, 0.45f), Shader.TileMode.CLAMP)
+            p.color = 0x8CFFFFFF.toInt(); rect.offset(0f, h * 0.025f); c.drawOval(rect, p); rect.offset(0f, -h * 0.025f)
+            p.color = Col.alpha(edge, 90); rect.offset(0f, -h * 0.012f); c.drawOval(rect, p); rect.offset(0f, h * 0.012f)
+            p.alpha = 255; p.shader = LinearGradient(0f, rect.top, 0f, rect.bottom, wellTop, wellBottom, Shader.TileMode.CLAMP)
             c.drawOval(rect, p); p.shader = null
         }
     }

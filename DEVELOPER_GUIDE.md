@@ -41,7 +41,7 @@ app/src/main/java/com/puzzel/lab/marbelshort/
 │  └─ GameEngine.kt         real-time simulation: taps, marble streams, physics, belt, cups, win/lose
 ├─ render/
 │  ├─ GameRenderer.kt       draws the playground (baked static layers + cached sprites)
-│  ├─ MachineArt.kt         procedural art: marbles, jelly blocks, jelly-box cups, belt socket, roller hub (+ unused legacy parts)
+│  ├─ MachineArt.kt         procedural art: marbles, jelly blocks, lid-box cups, belt socket, roller hub (+ unused legacy parts)
 │  ├─ Sprites.kt            `Col` colour helpers, `Painter` (icons/overlays/text), `SpriteCache`
 │  └─ Themes.kt             14 worlds (colour themes + sky palettes) and the level each one unlocks at
 └─ ui/
@@ -297,6 +297,7 @@ The look is the "Candy Glass Machine" described in `PLAYGROUND_GRAPHICS_PLAN.md`
   - `marbleShadowed` (each marble is one image with its shadow built in).
   - `block(color, variant, size, skin, open)`, which has separate open and closed versions that cross-fade via `BlockVisual.open`.
   - `cup`, `socket`, `hub`, and `overlay` (cage, chains, crate, ice, key, arrow, bomb, bucket, switch).
+- **Belt vs. tray:** `trayTop` leaves the belt housing (`HOUSING_RIM` 13 past the ball track), its shadow (7) and a clear `TRAY_GAP` (16) above the first row of cups.
 - **Board vs. HUD:** `GameScreen` passes the bottom of the HUD (status bar + 150dp: top row, booster tray and a small gap) as `topInset`. `GameLayout` keeps `boardPadTop` (= `BOARD_FRAME` 24 + 10) above the top row, because the board frame reaches 24 units above the grid. `LayoutFitTest` lays out all 5000 levels on six phone and tablet screens. It checks that the frame stays below the HUD, that the belt clears the funnel, and that at least 3 cup rows are visible. **Run it after changing the HUD, `GameLayout` or the board frame.** (Fixed 2026-11-24: tall boards such as level 111 had their top blocks under the booster tray.)
 - **Marble sizes:** marbles that burst out of a block use `GameLayout.hopperR` while they travel through the board, the hopper and the pipe. Since 2026-11-24 it is `BALL_R` = 21, the size in the reference art (about 42 px on a 720-wide screen), on tall phones. It scales down to `MIN_BALL_R` = 14 on short screens (16:9 phones, tablets), following `roomy` (the height below the HUD, 940 → 1240 units). The funnel grows with it, from 110–170 to 170–250 units tall, so it still holds an x2 block (18 balls); short screens could not fit both big balls and a usable board. The spout width, gate and hopper physics are sized from it. On the belt they keep the same size (`GameLayout.beltMarbleR = min(hopperR, belt fit)`) and sit side by side, like the reference art (2026-11-24).
   - *Belt fit* is the largest radius at which `capacity` marbles fit on the belt (`0.49 · length / capacity`). With at most 28 slots that is always the full ball size. Only the +6 slots booster (or Continue) makes belt marbles a little smaller.

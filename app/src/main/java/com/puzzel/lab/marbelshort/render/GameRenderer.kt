@@ -393,7 +393,7 @@ class GameRenderer(
         c.restore()
         // ---- belt housing
         val r = l.beltMarbleR
-        val hR = l.beltR + r + 13f
+        val hR = l.beltR + r + GameLayout.HOUSING_RIM
         val tR = l.beltR + r + 6f
         p.color = Col.alpha(frameDark, 90); p.maskFilter = blurred(7f)
         c.save(); c.translate(0f, 7f); c.drawPath(stadium(hR), p); c.restore(); p.maskFilter = null

@@ -44,8 +44,11 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
         return r
     }
     private val beltFit = beltFitR(spec.capacity)
-    /** Belt centre line to the top of the tray: clears the lower half of the belt housing. */
-    private fun trayGap(r: Float) = beltRFor(r) + r + 6f
+    /**
+     * Belt centre line to the top of the tray: the lower half of the belt housing (track + [HOUSING_RIM]),
+     * its drop shadow (7) and a clear gap of [TRAY_GAP] before the first row of cups.
+     */
+    private fun trayGap(r: Float) = beltRFor(r) + r + HOUSING_RIM + 7f + TRAY_GAP
 
     // ---- tray
     val trayCols = spec.tray.size
@@ -178,6 +181,10 @@ class GameLayout(val worldH: Float, topInset: Float, bottomInset: Float, spec: L
          * which is why LevelGenerator caps capacity at 28.
          */
         const val BALL_R = 21f
+        /** How far the belt housing reaches past the ball track (see GameRenderer belt housing). */
+        const val HOUSING_RIM = 13f
+        /** Empty space between the belt housing's shadow and the first row of cups. */
+        private const val TRAY_GAP = 16f
         /** Ball radius on short screens (16:9 phones, tablets). */
         const val MIN_BALL_R = 14f
         /** Must match MachineArt.HOLE_SPREAD (cup hole centres at ± spread · cupW). */
