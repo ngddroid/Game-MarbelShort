@@ -1,0 +1,22 @@
+# Gradle and build output (generated; never commit)
+.gradle/
+/build/
+/app/build/
+.kotlin/
+
+# Release builds (upload to Play Console instead of committing)
+/app/release/
+*.apk
+*.aab
+
+# Machine-specific
+local.properties
+.DS_Store
+
+# Android Studio per-user files
+.idea/workspace.xml
+.idea/deploymentTargetSelector.xml
+.idea/caches/
+
+# Generated website zip (rebuild from public/: zip -r -X public.zip public)
+/public.zip
