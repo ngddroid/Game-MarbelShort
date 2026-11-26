@@ -740,21 +740,9 @@ def save(img, path):
 
 
 def main():
-    dr = os.path.join(RES, "drawable")
-    write(os.path.join(dr, "ic_launcher_background.xml"),
-          to_xml(icon_background(), "Marble Pop Factory adaptive icon background: purple radial glow, rays, bubbles"))
-    write(os.path.join(dr, "ic_launcher_foreground.xml"),
-          to_xml(icon_foreground(), "Marble Pop Factory adaptive icon foreground: glossy funnel + marbles (66dp safe zone)"))
-    write(os.path.join(dr, "ic_launcher_monochrome.xml"),
-          to_xml(monochrome(), "Marble Pop Factory themed (monochrome) icon silhouette"))
-    write(os.path.join(dr, "ic_splash_logo.xml"),
-          to_xml(splash_logo(), "Marble Pop Factory Android 12+ splash icon (content inside the 72dp circle)"))
-
-    for folder, px in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
-        for round_, name in ((False, "ic_launcher.png"), (True, "ic_launcher_round.png")):
-            img = masked_icon(px, round_)
-            save(img, os.path.join(RES, "mipmap-" + folder, name))
-    save(store_icon(), os.path.join(STORE, "icon_512.png"))
+    # The launcher icon, in-app logo and store icon now come from art/app_icon_source.png via
+    # tools/set_app_icon.py (2026-11-25). This script only renders the Play Store feature graphic;
+    # the old vector icon code above is kept for reference and preview().
     save(feature_graphic(), os.path.join(STORE, "feature_1024x500.png"))
 
 

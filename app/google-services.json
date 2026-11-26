@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "644186796473",
-    "project_id": "marble-pop-factory",
-    "storage_bucket": "marble-pop-factory.firebasestorage.app"
+    "project_number": "497562730786",
+    "project_id": "game-marblepop",
+    "storage_bucket": "game-marblepop.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:644186796473:android:fc8100874579e53bfd0668",
+        "mobilesdk_app_id": "1:497562730786:android:3df9880a12aafb5c30e57b",
         "android_client_info": {
-          "package_name": "com.puzzel.lab.marbelshort"
+          "package_name": "com.ngstudio.marblepop"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyCYBV8WxwdNgNm7aomDlxbiVF5Pxy0XNRQ"
+          "current_key": "AIzaSyDUB5XOj11NGmsXifQ0NzP_X9QF7ilKqVI"
         }
       ],
       "services": {

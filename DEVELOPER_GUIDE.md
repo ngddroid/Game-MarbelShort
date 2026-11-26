@@ -1,8 +1,8 @@
-# Marble Pop Factory — Developer Guide
+# Marble Pop – Color Sort Puzzle — Developer Guide
 
 This document explains how the game is built, so a new developer can find their way around the code, change gameplay safely and add features (ads, new blocks, themes…).
 
-- **Package / applicationId:** `com.puzzel.lab.marbelshort`
+- **Package / applicationId:** `com.ngstudio.marblepop`
 - **Stack:** Kotlin, Jetpack Compose (UI), a custom 2D engine drawn on a Compose `Canvas` (no game library)
 - **Min SDK** 24 · **target/compile SDK** 37 · **AGP** 9.4.1 · built with the JetBrains JDK 21 that ships with Android Studio
 - Everything is **offline**. No accounts, analytics or real-money purchases. Progress is stored on the device.
@@ -25,7 +25,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 ## 2. Project layout
 
 ```
-app/src/main/java/com/puzzel/lab/marbelshort/
+app/src/main/java/com/ngstudio/marblepop/
 ├─ MainActivity.kt          system splash, immersive mode, creates GameRepository + SoundManager
 ├─ core/
 │  ├─ GameRepository.kt     ALL persistent player data (SharedPreferences) exposed as Compose state
@@ -54,13 +54,15 @@ app/src/main/java/com/puzzel/lab/marbelshort/
    │  └─ AdComponents.kt    WatchAdDialog, DebugAdOverlay
    └─ screens/              Splash, Onboarding, Main (home map + dock), MapArt (map drawing), Tabs, Game, Settings, Legal
 
-app/src/main/assets/legal/  terms.html, privacy.html, legal.css (game-themed, opened in a WebView)
+app/src/main/assets/legal/  copy of public/ (privacy_policy.html, terms_conditions.html, index.html, legal.css, fonts, logos), opened in a WebView
+public/                     the website: same pages, upload the folder as is (public.zip)
 app/src/main/assets/fonts/  fonts used by the HTML pages
 app/src/main/res/raw/       all sounds (generated WAVs)
 app/src/main/res/font/      lilita_one.ttf, fredoka.ttf (variable) — SIL OFL
 app/src/test/.../LevelGeneratorTest.kt
 tools/gen_sounds.py         regenerates every sound (pure Python, no dependencies)
-tools/gen_icon.py           regenerates launcher icons + Play Store art (needs Pillow)
+tools/set_app_icon.py       builds launcher icons, in-app logo and store icon from art/app_icon_source.png (needs Pillow)
+tools/gen_icon.py           renders the Play Store feature graphic (old vector icon code kept for reference)
 tools/jump_level.sh         debug helper: unlock a level on a device and open it
 docs/reference/             screenshots of the reference game used during analysis
 docs/store/                 512px icon, 1024x500 feature graphic
@@ -350,6 +352,8 @@ The full visual spec is in **UI_GRAPHICS_PLAN.md** ("Candy Glass Factory": gloss
 ### Worlds (`render/Themes.kt`)
 Themes are **worlds that unlock by progress**, not shop items. `Themes.all` is in unlock order. A level uses the world with the highest `unlockLevel` at or below its number (`Themes.indexForLevel`, also `LevelGenerator.themeFor`). In game, `GameRepository.themeForLevel(n, daily)` uses the level's own world, the same one the map shows, so a level unlocked early with an ad (e.g. 82 while the player is on 5) is shown in its world (Forest). Only daily challenges, which pick a random level from 100 to 3099, are capped at the player's highest level so they never reveal a far-off world.
 
+**Unlock early and choose (2026-11-25):** in Collection → Worlds, a locked world has an **Unlock** button that opens `WatchAdDialog` (`AdPlacement.UNLOCK_WORLD`; the button only shows while `Ads.rewarded` is available, so debug builds today). A rewarded ad adds the world to `adUnlockedWorlds` (pref `ad_worlds`) and selects it. Any unlocked world has **Use**, which sets `worldChoice` (pref `world_choice`); the **Auto** card at the top sets it back to -1. While a world is chosen, `themeForLevel()` returns it for every level, including daily challenges, and the "New World!" card is skipped (the world is just marked seen). `unlockedTheme` (shown as "your world now") still follows progress only.
+
 | # | World | From level | Map scenery |
 |---|---|---|---|
 | 1 | Candy Lab | 1 | candy |
@@ -506,14 +510,20 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 ## 10. Audio, fonts, icons, legal pages
 
 - **Sounds:** `tools/gen_sounds.py` synthesises every WAV in `res/raw` (pure Python standard library, about 6 s). Run `python3 tools/gen_sounds.py` to rebuild everything, or `python3 tools/gen_sounds.py sfx_pop` to rebuild one sound. `SoundManager` enforces a minimum gap per `Sfx` so rapid events don't stack.
-- **Icons:** `tools/gen_icon.py` regenerates the adaptive icon vectors, the legacy PNG mipmaps and `docs/store/*`. Edit the script, not the generated XML.
-- **Legal:** `assets/legal/terms.html` and `privacy.html` contain a **placeholder support e-mail** (marked `TODO(developer)`); replace it before release.
+- **Icons:** the app icon is the artwork `art/app_icon_source.png` (2026-11-25). `python3 tools/set_app_icon.py` turns it into the legacy and round mipmaps, the adaptive icon (the whole picture is the background layer `mipmap-*/ic_launcher_background.png`, with an empty foreground; the art fills 80dp of the 108dp layer, so the 72dp launcher mask shows about 90% of it), the in-app logo `drawable-nodpi/app_icon.png` (loading screen, Settings footer) and `docs/store/icon_512.png`. To change the icon, replace the artwork and re-run the script. There is no themed (monochrome) icon any more. The notification icon `ic_notification.xml` is still the old funnel silhouette, because notification icons must be one colour. `tools/gen_icon.py` now only renders `docs/store/feature_1024x500.png`.
+- **Legal:** Settings → Privacy / Terms first loads the live page from **https://game-marblepop.web.app** (`LEGAL_SITE` in `SettingsScreens.kt`). If the phone is offline, the site returns an error, or the page doesn't load within 8 s, it shows the same page from `assets/legal/` instead. The pages live in `public/` (website) and are copied as they are into `app/src/main/assets/legal/` (in-app WebView, Settings → Terms / Privacy). Edit `public/`, then copy it over: `rm -rf app/src/main/assets/legal && cp -R public app/src/main/assets/legal`. Contact: store.ngdtechnolab@gmail.com.
 - **Fonts:** Lilita One and Fredoka, both SIL Open Font License.
 
 ---
 
 ## 11. Debugging helpers
 
+- **Developer Tools in Settings (debug builds only, 2026-11-25):** a card above "Progress" for checking the Firebase and Play features on a device:
+  - *Send reminder now*: posts today's morning or evening reminder through `DailyReminders.show()`, the same path the 9 AM / 7 PM alarm uses.
+  - *Copy push token*: copies the FCM token. Paste it in Firebase console → Messaging → "Send test message".
+  - *Simulate app update*: swaps in Play's `FakeAppUpdateManager` and plays a flexible update through to "downloaded", so the "Update Ready!" popup and Restart path can be checked without Play.
+  - *Log test error (non-fatal)* and *Test crash*: send a Crashlytics non-fatal error or a real crash. Reports upload on the next launch.
+  - Analytics DebugView: `adb shell setprop debug.firebase.analytics.app com.ngstudio.marblepop` (`.none.` turns it off).
 - **Add test coins (debug builds only):** every coin pill (home, tabs and game HUD) shows a green "+" that opens a "Coins · DEBUG BUILD" popup with +100, +1,000 and +10,000 buttons (and "Open Shop" from home). The pieces live in `ui/components/AdComponents.kt`:
   - `CoinPill(value, modifier, onShop)` draws the pill.
   - The `DebugCoins` state object holds whether the popup is open.
@@ -525,8 +535,8 @@ Other natural places for rewarded ads, which currently don't use them: the free 
   ```bash
   tools/jump_level.sh 120 shot_name     # sets level=120, default skin, skips the "New World!" card, opens the game, saves shot_name.png next to the script
   ```
-- **Frame timing:** `adb shell dumpsys gfxinfo com.puzzel.lab.marbelshort` (call `… reset` first). Read `Number Frame deadline missed` and the gpu percentiles; see the smoothness rules in section 7.
-- **Inspect the save file:** `adb shell run-as com.puzzel.lab.marbelshort cat shared_prefs/marble_pop.xml`
+- **Frame timing:** `adb shell dumpsys gfxinfo com.ngstudio.marblepop` (call `… reset` first). Read `Number Frame deadline missed` and the gpu percentiles; see the smoothness rules in section 7.
+- **Inspect the save file:** `adb shell run-as com.ngstudio.marblepop cat shared_prefs/marble_pop.xml`
 
 ---
 
@@ -552,6 +562,7 @@ Other natural places for rewarded ads, which currently don't use them: the free 
 
 ## 13. Known gaps / TODO
 
+- **Firebase config is a stopgap (2026-11-25):** the package is now `com.ngstudio.marblepop`, but `app/google-services.json` only holds a copy of the old app's entry (`com.puzzel.lab.marbelshort`) with the new package name, so the build passes. Firebase (messaging, Crashlytics, Analytics) is still registered for the old package. Add `com.ngstudio.marblepop` as an Android app in Firebase project `marble-pop-factory` and replace `app/google-services.json` with the downloaded file.
 - **Unused art:** `MachineArt.crate/gear/cradle/chromeRect/rivet` are from the earlier factory-machine design and are unused; delete them if not needed.
 - **Visual check:** with the current playground, only levels 1, 3, 6, 14, 15, 23 and 24 were checked by eye on a device (plus the ad flows). The other special blocks and themes are covered only by the rule and solvability tests. The fail popup and the confetti were not seen on a device after the UI redesign.
-- **Release:** release signing is not configured, ads are not integrated (see section 9), and the legal pages contain a placeholder e-mail.
+- **Release:** release signing is not configured, and ads are not integrated (see section 9).

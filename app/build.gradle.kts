@@ -6,17 +6,17 @@ plugins {
 }
 
 android {
-    namespace = "com.puzzel.lab.marbelshort"
+    namespace = "com.ngstudio.marblepop"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.puzzel.lab.marbelshort"
+        applicationId = "com.ngstudio.marblepop"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

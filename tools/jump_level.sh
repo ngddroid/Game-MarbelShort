@@ -1,6 +1,6 @@
 #!/bin/zsh
 # usage: lvl.sh <level> <outname> — unlock level in the debug build, open it, screenshot (skips the "New World!" card)
-ADB=~/Library/Android/sdk/platform-tools/adb; P=com.puzzel.lab.marbelshort; S=${0:h}
+ADB=~/Library/Android/sdk/platform-tools/adb; P=com.ngstudio.marblepop; S=${0:h}
 $ADB shell am force-stop $P
 $ADB shell run-as $P cat shared_prefs/marble_pop.xml > $S/prefs_in.xml
 python3 - "$1" "$S/prefs_in.xml" "$S/prefs.xml" <<'PY'

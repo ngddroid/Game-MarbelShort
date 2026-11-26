@@ -1,6 +1,6 @@
 # Marble Pop Factory: Single-Phase Build Script
 
-> Working title: **"Marble Pop Factory"** (you can rename it; the package stays `com.puzzel.lab.marbelshort`).
+> Working title: **"Marble Pop Factory"** (you can rename it; the package stays `com.ngstudio.marblepop`).
 > Genre: tap → burst → marble-sort puzzle. It uses the same *type* of mechanic as the reference, but the name, art, palette, characters, levels and sounds are **all original**. We copy none of the reference's assets or branding.
 
 Reference captured from the connected **Samsung SM-A076B (720×1600, budget device)** → `docs/reference/`.
@@ -149,7 +149,7 @@ app/src/main/
  ├─ res/raw/*.ogg                    (generated SFX + music)
  ├─ res/font/lilita_one.ttf, fredoka.ttf
  ├─ res/drawable/ic_launcher_*.xml   (new icon), splash assets
- └─ java/com/puzzel/lab/marbelshort/
+ └─ java/com/ngstudio/marblepop/
      ├─ MainActivity.kt, MarbleApp.kt (navigator + transitions)
      ├─ core/       GameRepository, Settings, SoundManager, Haptics, Economy
      ├─ engine/     GameLoop, Physics (Verlet+hash), Belt, Tray, Grid, Particles, Tween/Easing
